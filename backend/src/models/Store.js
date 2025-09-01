@@ -24,9 +24,6 @@ const storeSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  refreshToken: {
-    type: String
-  },
   
   // Store configuration
   currency: {

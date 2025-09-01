@@ -1,41 +1,19 @@
 import mongoose from 'mongoose'
 
-// Product Option Schema based on Shopify's new product model
+// Product Option Schema - streamlined for Shopify mutations
 const productOptionSchema = new mongoose.Schema({
-  shopifyId: {
-    type: String,
-    required: true
-  },
   name: {
     type: String,
-    required: true
+    required: true,
+    trim: true
   },
-  position: {
-    type: Number,
-    required: true
-  },
-  values: [{
-    type: String,
-    required: true
-  }],
   optionValues: [{
-    id: String,
-    name: String,
-    hasVariants: Boolean
+    name: { type: String, required: true }
   }]
 }, { _id: false })
 
-// Product Variant Schema based on Shopify's structure
+// Product Variant Schema - only fields needed for mutations
 const productVariantSchema = new mongoose.Schema({
-  shopifyId: {
-    type: String,
-    required: true,
-    unique: true
-  },
-  title: {
-    type: String,
-    required: true
-  },
   price: {
     type: Number,
     required: true,
@@ -53,22 +31,18 @@ const productVariantSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
-  position: {
+  inventoryQuantity: {
     type: Number,
-    default: 1
+    default: 0
   },
   inventoryPolicy: {
     type: String,
     enum: ['deny', 'continue'],
     default: 'deny'
   },
-  inventoryQuantity: {
-    type: Number,
-    default: 0
-  },
   inventoryManagement: {
     type: String,
-    enum: ['shopify', 'manual', null],
+    enum: ['shopify', 'not_managed'],
     default: 'shopify'
   },
   requiresShipping: {
@@ -80,75 +54,46 @@ const productVariantSchema = new mongoose.Schema({
     default: true
   },
   weight: {
-    value: { type: Number, default: 0 },
-    unit: { type: String, enum: ['g', 'kg', 'oz', 'lb'], default: 'kg' }
+    type: Number,
+    default: 0
   },
-  selectedOptions: [{
-    name: String,
-    value: String
-  }],
-  availableForSale: {
-    type: Boolean,
-    default: true
+  weightUnit: {
+    type: String,
+    enum: ['g', 'kg', 'oz', 'lb'],
+    default: 'g'
   },
-  media: [{
-    id: String,
-    alt: String,
-    src: String,
-    mediaContentType: {
-      type: String,
-      enum: ['IMAGE', 'VIDEO', 'MODEL_3D', 'EXTERNAL_VIDEO']
-    }
-  }],
-  metafields: [{
-    namespace: String,
-    key: String,
-    value: String,
-    type: String
+  // Option values for new product model
+  optionValues: [{
+    optionName: String, // Links to product option name
+    name: String // The value name
   }]
 }, { _id: false })
 
-// Main Product Schema
+// Streamlined Product Schema - only essential fields for Shopify mutations
 const productSchema = new mongoose.Schema({
-  // Shopify identifiers
-  shopifyId: {
-    type: String,
-    required: true,
-    unique: true
-  },
-  shopifyHandle: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  
-  // Store reference
-  store: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Store',
-    required: true
-  },
-  
-  // Basic product information
+  // REQUIRED: Only field required by productCreate mutation
   title: {
     type: String,
     required: true,
     trim: true
   },
-  description: {
-    type: String,
-    trim: true
+  
+  // Dashboard metadata
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
   },
+  
+  // OPTIONAL: Common fields for productCreate mutation
   descriptionHtml: {
     type: String
   },
-  
-  // Product categorization
-  productType: {
+  vendor: {
     type: String,
     trim: true
   },
-  vendor: {
+  productType: {
     type: String,
     trim: true
   },
@@ -156,93 +101,36 @@ const productSchema = new mongoose.Schema({
     type: String,
     trim: true
   }],
-  
-  // Product status and visibility
+  handle: {
+    type: String,
+    trim: true,
+    lowercase: true
+  },
   status: {
     type: String,
     enum: ['ACTIVE', 'ARCHIVED', 'DRAFT'],
     default: 'DRAFT'
   },
-  publishedAt: {
-    type: Date
+  
+  // OPTIONAL: Publishing
+  published: {
+    type: Boolean,
+    default: false
   },
   
-  // SEO
+  // OPTIONAL: Collections
+  collectionsToJoin: [{
+    type: String
+  }],
+  
+  // OPTIONAL: SEO
   seo: {
     title: String,
     description: String
   },
   
-  // Product options (new model)
-  options: [productOptionSchema],
-  
-  // Product variants
-  variants: [productVariantSchema],
-  
-  // Media (images, videos, 3D models)
-  media: [{
-    id: String,
-    alt: String,
-    src: String,
-    mediaContentType: {
-      type: String,
-      enum: ['IMAGE', 'VIDEO', 'MODEL_3D', 'EXTERNAL_VIDEO']
-    },
-    position: Number
-  }],
-  
-  // Featured media
-  featuredMedia: {
-    id: String,
-    alt: String,
-    src: String,
-    mediaContentType: String
-  },
-  
-  // Pricing information
-  priceRange: {
-    minVariantPrice: { type: Number, min: 0 },
-    maxVariantPrice: { type: Number, min: 0 }
-  },
-  compareAtPriceRange: {
-    minVariantPrice: { type: Number, min: 0 },
-    maxVariantPrice: { type: Number, min: 0 }
-  },
-  
-  // Inventory
-  totalInventory: {
-    type: Number,
-    default: 0
-  },
-  tracksInventory: {
-    type: Boolean,
-    default: true
-  },
-  hasOutOfStockVariants: {
-    type: Boolean,
-    default: false
-  },
-  hasOnlyDefaultVariant: {
-    type: Boolean,
-    default: true
-  },
-  
-  // Collections
-  collections: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Collection'
-  }],
-  
-  // Metafields for custom data
-  metafields: [{
-    namespace: { type: String, required: true },
-    key: { type: String, required: true },
-    value: { type: String, required: true },
-    type: { type: String, default: 'single_line_text_field' }
-  }],
-  
-  // Gift card specific
-  isGiftCard: {
+  // OPTIONAL: Gift card functionality
+  giftCard: {
     type: Boolean,
     default: false
   },
@@ -250,118 +138,125 @@ const productSchema = new mongoose.Schema({
     type: String
   },
   
-  // Publishing
-  publishedOnChannels: [{
-    channelId: String,
-    channelName: String,
-    publishedAt: Date
+  // Product structure for new product model
+  options: [productOptionSchema],
+  variants: [productVariantSchema],
+  
+  // Media for productCreateMedia mutation
+  media: [{
+    src: { type: String, required: true },
+    alt: String,
+    mediaContentType: {
+      type: String,
+      enum: ['IMAGE', 'VIDEO', 'MODEL_3D', 'EXTERNAL_VIDEO'],
+      required: true
+    }
   }],
   
-  // Sync information
-  lastSyncAt: {
-    type: Date,
-    default: Date.now
-  },
-  syncStatus: {
-    type: String,
-    enum: ['pending', 'syncing', 'synced', 'error'],
-    default: 'pending'
-  },
-  syncErrors: [{
-    message: String,
-    timestamp: { type: Date, default: Date.now },
-    resolved: { type: Boolean, default: false }
-  }],
-  
-  // Dashboard specific fields
-  dashboardSettings: {
-    featured: { type: Boolean, default: false },
-    priority: { type: Number, default: 0 },
-    notes: String
-  },
-  
-  isDeleted: {
-    type: Boolean,
-    default: false
-  },
-  deletedAt: {
-    type: Date
-  }
+  // OPTIONAL: Metafields
+  metafields: [{
+    namespace: { type: String, required: true },
+    key: { type: String, required: true },
+    value: { type: String, required: true },
+    type: { type: String, default: 'single_line_text_field' }
+  }]
 }, {
   timestamps: true
 })
 
 // Indexes for performance
-productSchema.index({ store: 1, shopifyId: 1 })
-productSchema.index({ store: 1, status: 1 })
-productSchema.index({ store: 1, productType: 1 })
-productSchema.index({ store: 1, vendor: 1 })
-productSchema.index({ tags: 1 })
-productSchema.index({ 'variants.sku': 1 })
-productSchema.index({ lastSyncAt: 1 })
+productSchema.index({ createdBy: 1 })
+productSchema.index({ status: 1 })
+productSchema.index({ handle: 1 }, { unique: true, sparse: true })
 
-// Virtual for variant count
-productSchema.virtual('variantCount').get(function() {
-  return this.variants.length
-})
-
-// Virtual for available variants
-productSchema.virtual('availableVariants').get(function() {
-  return this.variants.filter(variant => variant.availableForSale)
-})
-
-// Method to get variant by Shopify ID
-productSchema.methods.getVariantByShopifyId = function(shopifyId) {
-  return this.variants.find(variant => variant.shopifyId === shopifyId)
+// Method to convert to ProductInput for productCreate mutation
+productSchema.methods.toShopifyProductInput = function() {
+  const input = {
+    title: this.title
+  }
+  
+  // Add optional fields only if they exist
+  if (this.descriptionHtml) input.descriptionHtml = this.descriptionHtml
+  if (this.vendor) input.vendor = this.vendor
+  if (this.productType) input.productType = this.productType
+  if (this.tags?.length) input.tags = this.tags
+  if (this.handle) input.handle = this.handle
+  if (this.status) input.status = this.status
+  if (typeof this.published === 'boolean') input.published = this.published
+  if (this.collectionsToJoin?.length) input.collectionsToJoin = this.collectionsToJoin
+  if (this.giftCard) input.giftCard = this.giftCard
+  if (this.giftCardTemplateSuffix) input.giftCardTemplateSuffix = this.giftCardTemplateSuffix
+  
+  // Add SEO if exists
+  if (this.seo?.title || this.seo?.description) {
+    input.seo = {}
+    if (this.seo.title) input.seo.title = this.seo.title
+    if (this.seo.description) input.seo.description = this.seo.description
+  }
+  
+  // Add product options for new product model
+  if (this.options?.length) {
+    input.productOptions = this.options.map(option => ({
+      name: option.name,
+      values: option.optionValues?.map(value => ({ name: value.name })) || []
+    }))
+  }
+  
+  // Add metafields if exist
+  if (this.metafields?.length) {
+    input.metafields = this.metafields.map(meta => ({
+      namespace: meta.namespace,
+      key: meta.key,
+      value: meta.value,
+      type: meta.type
+    }))
+  }
+  
+  return input
 }
 
-// Method to update sync status
-productSchema.methods.updateSyncStatus = function(status, error = null) {
-  this.syncStatus = status
-  this.lastSyncAt = new Date()
+// Method for productVariantsBulkCreate mutation
+productSchema.methods.toShopifyVariantsInput = function() {
+  if (!this.variants?.length) return []
   
-  if (error) {
-    this.syncErrors.push({
-      message: error.message || error,
-      timestamp: new Date()
-    })
-  }
-  
-  return this.save()
-}
-
-// Method to calculate price range
-productSchema.methods.calculatePriceRange = function() {
-  if (this.variants.length === 0) {
-    this.priceRange = { minVariantPrice: 0, maxVariantPrice: 0 }
-    return
-  }
-  
-  const prices = this.variants.map(v => v.price)
-  const compareAtPrices = this.variants
-    .filter(v => v.compareAtPrice)
-    .map(v => v.compareAtPrice)
-  
-  this.priceRange = {
-    minVariantPrice: Math.min(...prices),
-    maxVariantPrice: Math.max(...prices)
-  }
-  
-  if (compareAtPrices.length > 0) {
-    this.compareAtPriceRange = {
-      minVariantPrice: Math.min(...compareAtPrices),
-      maxVariantPrice: Math.max(...compareAtPrices)
+  return this.variants.map(variant => {
+    const variantInput = {
+      price: variant.price
     }
-  }
+    
+    // Add optional variant fields only if they exist
+    if (variant.compareAtPrice) variantInput.compareAtPrice = variant.compareAtPrice
+    if (variant.sku) variantInput.sku = variant.sku
+    if (variant.barcode) variantInput.barcode = variant.barcode
+    if (variant.weight) variantInput.weight = variant.weight
+    if (variant.weightUnit) variantInput.weightUnit = variant.weightUnit
+    if (typeof variant.inventoryQuantity === 'number') variantInput.inventoryQuantity = variant.inventoryQuantity
+    if (variant.inventoryPolicy) variantInput.inventoryPolicy = variant.inventoryPolicy
+    if (variant.inventoryManagement) variantInput.inventoryManagement = variant.inventoryManagement
+    if (typeof variant.requiresShipping === 'boolean') variantInput.requiresShipping = variant.requiresShipping
+    if (typeof variant.taxable === 'boolean') variantInput.taxable = variant.taxable
+    
+    // Add option values for new product model
+    if (variant.optionValues?.length) {
+      variantInput.optionValues = variant.optionValues.map(opt => ({
+        optionName: opt.optionName,
+        name: opt.name
+      }))
+    }
+    
+    return variantInput
+  })
 }
 
-// Pre-save hook to calculate derived fields
-productSchema.pre('save', function(next) {
-  this.calculatePriceRange()
-  this.hasOnlyDefaultVariant = this.variants.length <= 1
-  this.hasOutOfStockVariants = this.variants.some(v => v.inventoryQuantity <= 0)
-  this.totalInventory = this.variants.reduce((total, v) => total + v.inventoryQuantity, 0)
-  next()
-})
+// Method for productCreateMedia mutation
+productSchema.methods.toShopifyMediaInput = function() {
+  if (!this.media?.length) return []
+  
+  return this.media.map(mediaItem => ({
+    alt: mediaItem.alt,
+    mediaContentType: mediaItem.mediaContentType,
+    originalSource: mediaItem.src
+  }))
+}
 
 export const Product = mongoose.model('Product', productSchema)

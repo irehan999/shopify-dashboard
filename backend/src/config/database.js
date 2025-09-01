@@ -3,20 +3,10 @@ import mongoose from 'mongoose'
 const connectDB = async () => {
   try {
     const connectionOptions = {
-      // Use the new MongoDB driver's stable API
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      
-      // Connection pool settings
-      maxPoolSize: 10, // Maintain up to 10 socket connections
-      serverSelectionTimeoutMS: 5000, // Keep trying to send operations for 5 seconds
-      socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
-      bufferMaxEntries: 0, // Disable mongoose buffering
-      bufferCommands: false, // Disable mongoose buffering
-      
-      // Additional options for production
-      retryWrites: true,
-      w: 'majority',
+      // Basic connection options only
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
     }
 
     // MongoDB connection string from environment variables
@@ -28,10 +18,6 @@ const connectDB = async () => {
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`)
     
     // Connection event listeners
-    mongoose.connection.on('connected', () => {
-      console.log('📡 Mongoose connected to MongoDB')
-    })
-
     mongoose.connection.on('error', (err) => {
       console.error('❌ Mongoose connection error:', err)
     })
@@ -82,18 +68,7 @@ const checkDBHealth = async () => {
   }
 }
 
-// Graceful shutdown
-const gracefulShutdown = async () => {
-  try {
-    await mongoose.connection.close()
-    console.log('📡 Database connection closed gracefully')
-  } catch (error) {
-    console.error('❌ Error during database shutdown:', error)
-  }
-}
-
 export {
   connectDB,
-  checkDBHealth,
-  gracefulShutdown
+  checkDBHealth
 }

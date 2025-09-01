@@ -2,8 +2,9 @@ import axios from 'axios'
 
 // Create base axios instance
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000',
   timeout: 10000,
+  withCredentials: true, // Important for httpOnly cookies
   headers: {
     'Content-Type': 'application/json',
   },
@@ -12,11 +13,7 @@ const api = axios.create({
 // Request interceptor
 api.interceptors.request.use(
   (config) => {
-    // Add auth token if available
-    const token = localStorage.getItem('auth_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
+    // No need to manually add tokens - httpOnly cookies handle auth
     return config
   },
   (error) => {
@@ -27,22 +24,23 @@ api.interceptors.request.use(
 // Response interceptor
 api.interceptors.response.use(
   (response) => {
-    return response.data
+    return response
   },
   (error) => {
     // Handle common errors
     if (error.response?.status === 401) {
-      // Handle unauthorized access
-      localStorage.removeItem('auth_token')
-      window.location.href = '/login'
+      // Handle unauthorized access - clear auth and redirect
+      console.log('Unauthorized access, redirecting to login');
+      // You can dispatch logout action here
     }
     
     if (error.response?.status === 500) {
       console.error('Server error:', error.response.data)
     }
     
-    return Promise.reject(error.response?.data || error.message)
+    return Promise.reject(error)
   }
 )
 
+export { api }
 export default api
