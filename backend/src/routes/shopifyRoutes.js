@@ -1,19 +1,22 @@
 import express from 'express';
 import { 
+  // OAuth and Store Management
   initiateAuth,
   handleCallback,
   getConnectedStores,
   disconnectStore,
   getStoreAnalytics,
   validateSession,
+  
+  // Webhook Handlers
   handleAppUninstalled,
   handleProductCreate,
   handleProductUpdate,
   handleProductDelete,
   handleOrderCreate,
   handleOrderUpdate
-} from '@/controllers/shopifyController.js';
-import { authenticateUser as verifyJWT } from '@/middleware/auth.js';
+} from '../controllers/shopifyController.js';
+import { authenticateUser as verifyJWT } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -47,6 +50,11 @@ router.get('/stores/:storeId/analytics', verifyJWT, getStoreAnalytics);
 router.get('/session/validate', validateSession, (req, res) => {
   res.json({ valid: true, shop: req.session.shop });
 });
+
+
+// ============================================================================
+// WEBHOOK ENDPOINTS
+// ============================================================================
 
 // Webhook endpoints (no auth required, but HMAC verified in controller)
 // App lifecycle webhooks

@@ -1,12 +1,12 @@
-import crypto from 'crypto';
-import { ApiError } from '@/utils/ApiError.js';
-import { ApiResponse } from '@/utils/ApiResponse.js';
-import asyncHandler from '@/utils/AsyncHandle.js';
-import { User } from '@/models/User.js';
-import { Store } from '@/models/Store.js';
+
+import { User } from '../models/User.js';
+import { Store } from '../models/Store.js';
 
 // Import Shopify configuration
-import { shopify, getSessionFromRequest, validateWebhook } from '@/config/shopify.js';
+import shopify, { getSessionFromRequest, validateWebhook } from '../config/shopify.js';
+import { ApiError } from '../utils/ApiError.js';
+import { ApiResponse } from '../utils/ApiResponse.js';
+import asyncHandler from '../utils/AsyncHanlde.js';
 
 /**
  * Register webhooks for the store
@@ -24,11 +24,62 @@ const registerWebhooks = async (session) => {
       'ORDERS_UPDATE'
     ];
 
+    // ✅ Fix: Use proper topic mapping instead of string replace
+    const topicMapping = {
+      'APP_UNINSTALLED': 'app/uninstalled',
+      'PRODUCTS_CREATE': 'products/create',
+      'PRODUCTS_UPDATE': 'products/update',
+      'PRODUCTS_DELETE': 'products/delete',
+      'ORDERS_CREATE': 'orders/create',
+      'ORDERS_UPDATE': 'orders/update'
+    };
+
     const baseUrl = process.env.SHOPIFY_APP_URL || process.env.BACKEND_URL;
     
+    // ✅ Fix: Check existing webhooks to prevent duplicates
+    const existingWebhooksQuery = `
+      query {
+        webhookSubscriptions(first: 100) {
+          edges {
+            node {
+              id
+              topic
+              endpoint {
+                __typename
+                ... on WebhookHttpEndpoint {
+                  callbackUrl
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const existingWebhooksResponse = await client.query({
+      data: { query: existingWebhooksQuery }
+    });
+
+    const existingWebhooks = existingWebhooksResponse.body.data.webhookSubscriptions.edges.map(
+      edge => ({
+        topic: edge.node.topic,
+        callbackUrl: edge.node.endpoint?.callbackUrl
+      })
+    );
+    
     for (const topic of webhookTopics) {
-      const webhookPath = `/api/shopify/webhooks/${topic.toLowerCase().replace('_', '/')}`;
+      const webhookPath = `/api/shopify/webhooks/${topicMapping[topic]}`;
       const callbackUrl = `${baseUrl}${webhookPath}`;
+
+      // Check if webhook already exists
+      const webhookExists = existingWebhooks.some(
+        webhook => webhook.topic === topic && webhook.callbackUrl === callbackUrl
+      );
+
+      if (webhookExists) {
+        console.log(`Webhook already exists for ${topic}, skipping...`);
+        continue;
+      }
       
       const mutation = `
         mutation webhookSubscriptionCreate($topic: WebhookSubscriptionTopic!, $webhookSubscription: WebhookSubscriptionInput!) {
@@ -197,7 +248,8 @@ const handleCallback = asyncHandler(async (req, res) => {
       shopName: shopInfo.name,
       shopEmail: shopInfo.email,
       accessToken: session.accessToken,
-      scopes: session.scope ? session.scope.split(',') : [],
+      // ✅ Fix: Handle both comma and space separated scopes
+      scopes: session.scope ? session.scope.split(/[,\s]+/).filter(s => s.length > 0) : [],
       isActive: true,
       connectedAt: new Date(),
       shopData: {
@@ -226,13 +278,25 @@ const handleCallback = asyncHandler(async (req, res) => {
       Object.assign(store, storeData);
       await store.save();
     } else {
+      // ✅ Fix: Verify user exists before creating store to prevent orphaned stores
+      const userExists = await User.findById(storedAuth.userId);
+      if (!userExists) {
+        throw new ApiError(404, 'User not found. Cannot create store.');
+      }
+
       // Create new store
       store = await Store.create(storeData);
       
       // Increment user's connected stores count
-      await User.findByIdAndUpdate(storedAuth.userId, {
+      const userUpdateResult = await User.findByIdAndUpdate(storedAuth.userId, {
         $inc: { connectedStores: 1 }
       });
+
+      if (!userUpdateResult) {
+        // If user update fails, clean up the store to prevent orphaned data
+        await Store.findByIdAndDelete(store._id);
+        throw new ApiError(500, 'Failed to update user store count');
+      }
     }
 
     // Register webhooks after successful connection
@@ -297,10 +361,14 @@ const disconnectStore = asyncHandler(async (req, res) => {
   store.disconnectedAt = new Date();
   await store.save();
 
-  // Update user's connected stores count
-  await User.findByIdAndUpdate(userId, {
+  // ✅ Fix: Check if user exists before updating connected stores count
+  const userUpdateResult = await User.findByIdAndUpdate(userId, {
     $inc: { connectedStores: -1 }
   });
+
+  if (!userUpdateResult) {
+    console.warn(`User ${userId} not found when disconnecting store ${storeId}`);
+  }
 
   res.json(new ApiResponse(200, {}, 'Store disconnected successfully'));
 });
@@ -373,6 +441,10 @@ const getStoreAnalytics = asyncHandler(async (req, res) => {
   }
 });
 
+// ============================================================================
+// WEBHOOK HANDLERS
+// ============================================================================
+
 /**
  * Webhook handler for app uninstallation
  * POST /api/shopify/webhooks/app/uninstalled
@@ -398,10 +470,14 @@ const handleAppUninstalled = asyncHandler(async (req, res) => {
       store.disconnectedAt = new Date();
       await store.save();
 
-      // Update user's connected stores count
-      await User.findByIdAndUpdate(store.userId, {
+      // ✅ Fix: Check if user exists before updating connected stores count
+      const userUpdateResult = await User.findByIdAndUpdate(store.userId, {
         $inc: { connectedStores: -1 }
       });
+
+      if (!userUpdateResult) {
+        console.warn(`User ${store.userId} not found when handling app uninstall for shop ${shopDomain}`);
+      }
 
       console.log(`App uninstalled from shop: ${shopDomain}`);
     }
@@ -559,12 +635,15 @@ const handleOrderUpdate = asyncHandler(async (req, res) => {
 });
 
 export {
+  // OAuth and Store Management
   initiateAuth,
   handleCallback,
   getConnectedStores,
   disconnectStore,
   getStoreAnalytics,
   validateSession,
+  
+  // Webhook Handlers
   handleAppUninstalled,
   handleProductCreate,
   handleProductUpdate,

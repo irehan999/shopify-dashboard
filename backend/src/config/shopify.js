@@ -1,17 +1,31 @@
+import dotenv from 'dotenv';
 import { shopifyApi, LATEST_API_VERSION } from '@shopify/shopify-api';
+import { restResources } from '@shopify/shopify-api/rest/admin/2024-04';
+import '@shopify/shopify-api/adapters/node';
 import { MongoDBSessionStorage } from '@shopify/shopify-app-session-storage-mongodb';
+
+// Load environment variables first
+dotenv.config();
+
+// Validate required environment variables
+const requiredEnvVars = ['SHOPIFY_API_KEY', 'SHOPIFY_API_SECRET', 'MONGODB_URI'];
+const missing = requiredEnvVars.filter(envVar => !process.env[envVar]);
+
+if (missing.length > 0) {
+  throw new Error(`Cannot initialize Shopify API Library. Missing values for: ${missing.join(', ')}`);
+}
 
 // MongoDB session storage configuration
 const sessionStorage = new MongoDBSessionStorage(
   process.env.MONGODB_URI,
-  process.env.SHOPIFY_CLIENT_SECRET
+  process.env.SHOPIFY_API_SECRET
 );
 
 // Configure Shopify API with MongoDB session storage
 export const shopify = shopifyApi({
   // Basic app configuration
-  apiKey: process.env.SHOPIFY_CLIENT_ID,
-  apiSecretKey: process.env.SHOPIFY_CLIENT_SECRET,
+  apiKey: process.env.SHOPIFY_API_KEY,
+  apiSecretKey: process.env.SHOPIFY_API_SECRET,
   
   // Product-focused scopes for your requirements
   scopes: [
@@ -59,7 +73,7 @@ export const getSessionFromRequest = async (req, res) => {
   }
 };
 
-// Helper to validate webhook
+// Helper to validate webhook with proper secret
 export const validateWebhook = (rawBody, signature) => {
   return shopify.webhooks.verify({
     rawBody,

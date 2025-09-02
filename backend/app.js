@@ -9,13 +9,46 @@ import authRoutes from './src/routes/authRoutes.js';
 import userRoutes from './src/routes/userRoutes.js';
 import notificationRoutes from './src/routes/notificationRoutes.js';
 import shopifyRoutes from './src/routes/shopifyRoutes.js';
+import productRoutes from './src/routes/productRoutesNew.js';
+import shopifyGraphQLRoutes from './src/routes/shopifyGraphQLRoutesNew.js';
+
+// Import webhook handlers directly for early middleware setup
+import { 
+  handleAppUninstalled,
+  handleProductCreate,
+  handleProductUpdate,
+  handleProductDelete,
+  handleOrderCreate,
+  handleOrderUpdate
+} from './src/controllers/shopifyController.js';
+
 // Future routes will be added here
 // import storeRoutes from './src/routes/storeRoutes.js';
-// import productRoutes from './src/routes/productRoutes.js';
+// import collectionRoutes from './src/routes/collectionRoutes.js';
 
 const app = express();
 
-// Express middleware
+// ✅ CRITICAL: Webhook endpoints BEFORE any middleware (need raw body)
+// Middleware to capture raw body for webhook verification
+const captureRawBody = (req, res, next) => {
+  let data = '';
+  req.setEncoding('utf8');
+  req.on('data', chunk => data += chunk);
+  req.on('end', () => {
+    req.rawBody = data;
+    next();
+  });
+};
+
+// Shopify webhook endpoints (BEFORE JSON middleware)
+app.post('/api/shopify/webhooks/app/uninstalled', captureRawBody, handleAppUninstalled);
+app.post('/api/shopify/webhooks/products/create', captureRawBody, handleProductCreate);
+app.post('/api/shopify/webhooks/products/update', captureRawBody, handleProductUpdate);
+app.post('/api/shopify/webhooks/products/delete', captureRawBody, handleProductDelete);
+app.post('/api/shopify/webhooks/orders/create', captureRawBody, handleOrderCreate);
+app.post('/api/shopify/webhooks/orders/update', captureRawBody, handleOrderUpdate);
+
+// Express middleware (AFTER webhooks)
 app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
@@ -100,10 +133,12 @@ app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/shopify', shopifyRoutes);
+app.use('/api/products', productRoutes);
+app.use('/api/shopify-admin', shopifyGraphQLRoutes);
 
 // Future routes will be added here
 // app.use('/api/stores', storeRoutes);
-// app.use('/api/products', productRoutes);
+// app.use('/api/collections', collectionRoutes);
 
 // Global error handling middleware
 app.use((err, req, res, next) => {

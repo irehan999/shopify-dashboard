@@ -13,6 +13,7 @@ dotenv.config(
       path: './.env'
     }
 );
+console.log("Loaded vars:", process.env.PORT, process.env.ACCESS_TOKEN_SECRET);
 
 // Create HTTP server
 const server = http.createServer(app);
