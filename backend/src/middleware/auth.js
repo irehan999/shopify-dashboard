@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken'
 import { User } from '../models/User.js'
 import { ApiError } from '../utils/ApiError.js'
-import asyncHandler from '../utils/AsyncHanlde.js'
+import asyncHandler from '../utils/AsyncHandle.js'
 
 const authenticateUser = asyncHandler(async (req, res, next) => {
     const tokenFromHeader = req.headers.authorization;

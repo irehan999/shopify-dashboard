@@ -46,6 +46,11 @@ const userSchema = new mongoose.Schema({
     language: { type: String, default: 'en' },
     theme: { type: String, default: 'dark' }
   },
+  connectedStores: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   isBlocked: {
     type: Boolean,
     default: false

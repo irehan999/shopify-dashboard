@@ -1,0 +1,36 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+name = "shopify-dashboard"
+client_id = "your_client_id_here"
+application_url = "https://07fbd8d74223.ngrok-free.app/api/shopify/auth"
+
+[access_scopes]
+# Use existing requests
+scopes = "read_products,write_products,read_product_listings,write_product_listings,read_files,write_files"
+
+[auth]
+redirect_urls = [
+  "https://07fbd8d74223.ngrok-free.app/api/shopify/auth/callback"
+]
+
+[webhooks]
+api_version = "2025-07"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/uninstalled" ]
+  uri = "https://07fbd8d74223.ngrok-free.app/api/shopify/webhooks/app/uninstalled"
+
+  [[webhooks.subscriptions]]
+  topics = [ "products/create" ]
+  uri = "https://07fbd8d74223.ngrok-free.app/api/shopify/webhooks/products/create"
+
+  [[webhooks.subscriptions]]
+  topics = [ "products/update" ]
+  uri = "https://07fbd8d74223.ngrok-free.app/api/shopify/webhooks/products/update"
+
+  [[webhooks.subscriptions]]
+  topics = [ "products/delete" ]
+  uri = "https://07fbd8d74223.ngrok-free.app/api/shopify/webhooks/products/delete"
+
+[pos]
+embedded = false

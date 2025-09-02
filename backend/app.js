@@ -8,10 +8,10 @@ import rateLimit from 'express-rate-limit';
 import authRoutes from './src/routes/authRoutes.js';
 import userRoutes from './src/routes/userRoutes.js';
 import notificationRoutes from './src/routes/notificationRoutes.js';
+import shopifyRoutes from './src/routes/shopifyRoutes.js';
 // Future routes will be added here
 // import storeRoutes from './src/routes/storeRoutes.js';
 // import productRoutes from './src/routes/productRoutes.js';
-// import notificationRoutes from './src/routes/notificationRoutes.js';
 
 const app = express();
 
@@ -99,6 +99,7 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/shopify', shopifyRoutes);
 
 // Future routes will be added here
 // app.use('/api/stores', storeRoutes);

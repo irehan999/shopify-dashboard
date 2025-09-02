@@ -4,7 +4,7 @@ import {
   ShoppingBagIcon,
   UsersIcon,
   CurrencyDollarIcon,
-  TrendingUpIcon
+  ArrowTrendingUpIcon
 } from '@heroicons/react/24/outline'
 
 const stats = [
@@ -107,7 +107,7 @@ export default function Dashboard() {
                     : 'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-400'
                   }
                 `}>
-                  <TrendingUpIcon className={`
+                  <ArrowTrendingUpIcon className={`
                     -ml-1 mr-0.5 flex-shrink-0 self-center h-4 w-4 
                     ${stat.changeType === 'positive' ? 'text-green-500' : 'text-red-500 rotate-180'}
                   `} />

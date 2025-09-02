@@ -1,107 +1,96 @@
 import mongoose from 'mongoose'
 
 const storeSchema = new mongoose.Schema({
+  // User who owns this store connection
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+    index: true
+  },
+  
   // Shopify store information
-  shopifyDomain: {
+  shopDomain: {
     type: String,
     required: true,
-    unique: true,
-    trim: true
+    trim: true,
+    lowercase: true
   },
   shopName: {
     type: String,
     required: true,
     trim: true
   },
-  shopId: {
+  shopEmail: {
     type: String,
-    required: true,
-    unique: true
+    trim: true,
+    lowercase: true
   },
   
-  // Authentication tokens
+  // OAuth access token (encrypted in production)
   accessToken: {
     type: String,
     required: true
   },
+  scopes: [{
+    type: String
+  }],
   
-  // Store configuration
-  currency: {
-    type: String,
-    default: 'USD'
-  },
-  timezone: {
-    type: String,
-    default: 'UTC'
-  },
-  locale: {
-    type: String,
-    default: 'en'
-  },
-  
-  // Store status
+  // Connection status
   isActive: {
     type: Boolean,
-    default: true
+    default: true,
+    index: true
   },
-  isConnected: {
-    type: Boolean,
-    default: false
+  connectedAt: {
+    type: Date,
+    default: Date.now
   },
-  lastSyncAt: {
+  disconnectedAt: {
     type: Date
   },
   
-  // Store metadata
-  planName: {
-    type: String
-  },
-  country: {
-    type: String
-  },
-  province: {
-    type: String
-  },
-  city: {
-    type: String
-  },
-  address: {
-    type: String
-  },
-  zipCode: {
-    type: String
-  },
-  phone: {
-    type: String
-  },
-  email: {
-    type: String
+  // Shop metadata from Shopify API
+  shopData: {
+    id: Number,
+    currency: String,
+    timezone: String,
+    plan: String,
+    country: String,
+    province: String,
+    city: String,
+    address: String,
+    zip: String,
+    phone: String
   },
   
-  // Store owner/manager
-  owner: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+  // Sync information
+  lastSyncAt: {
+    type: Date
+  },
+  syncStatus: {
+    type: String,
+    enum: ['pending', 'syncing', 'completed', 'failed'],
+    default: 'pending'
   },
   
-  // Store features and limits
-  features: {
-    multiLocation: { type: Boolean, default: false },
-    giftCards: { type: Boolean, default: false },
-    abandonedCheckout: { type: Boolean, default: false },
-    reports: { type: Boolean, default: false }
+  // Webhook configuration
+  webhookEndpoints: [{
+    topic: String,
+    address: String,
+    createdAt: { type: Date, default: Date.now }
+  }],
+  
+  // Cached analytics (updated periodically)
+  analytics: {
+    totalOrders: { type: Number, default: 0 },
+    totalRevenue: { type: Number, default: 0 },
+    totalProducts: { type: Number, default: 0 },
+    totalCustomers: { type: Number, default: 0 },
+    lastUpdated: Date
   },
   
-  limits: {
-    products: { type: Number, default: 25 },
-    variants: { type: Number, default: 100 },
-    fileStorage: { type: Number, default: 1000 }, // MB
-    bandwidth: { type: Number, default: 1000 }, // GB per month
-    staffAccounts: { type: Number, default: 2 }
-  },
-  
-  // Store settings for dashboard
+  // Dashboard settings
   dashboardSettings: {
     syncFrequency: { 
       type: String, 
@@ -112,52 +101,63 @@ const storeSchema = new mongoose.Schema({
     notifications: { type: Boolean, default: true }
   },
   
-  // Webhook endpoints
-  webhooks: [{
-    topic: { type: String, required: true },
-    endpoint: { type: String, required: true },
-    isActive: { type: Boolean, default: true },
-    createdAt: { type: Date, default: Date.now }
-  }],
-  
   // Error tracking
   lastError: {
     message: String,
     code: String,
     timestamp: Date
-  },
-  
-  isDeleted: {
-    type: Boolean,
-    default: false
-  },
-  deletedAt: {
-    type: Date
   }
 }, {
   timestamps: true
 })
 
-// Indexes for performance
-storeSchema.index({ owner: 1 })
-storeSchema.index({ shopifyDomain: 1 })
-storeSchema.index({ isActive: 1, isConnected: 1 })
+// Compound index for user and shop (unique connection per user)
+storeSchema.index({ userId: 1, shopDomain: 1 }, { unique: true })
+
+// Index for active stores
+storeSchema.index({ userId: 1, isActive: 1 })
+
+// Index for shop domain lookup
+storeSchema.index({ shopDomain: 1 })
+
+// Pre-save middleware to handle shop domain formatting
+storeSchema.pre('save', function(next) {
+  if (this.shopDomain && !this.shopDomain.includes('.myshopify.com')) {
+    this.shopDomain = `${this.shopDomain}.myshopify.com`
+  }
+  next()
+})
 
 // Virtual for store URL
 storeSchema.virtual('storeUrl').get(function() {
-  return `https://${this.shopifyDomain}`
+  return `https://${this.shopDomain}`
 })
 
-// Method to check if store token is valid
+// Virtual for admin URL
+storeSchema.virtual('adminUrl').get(function() {
+  return `https://${this.shopDomain}/admin`
+})
+
+// Instance method to check if store token is valid
 storeSchema.methods.isTokenValid = function() {
-  // Add token validation logic here
-  return this.accessToken && this.isConnected
+  return this.accessToken && this.isActive
 }
 
-// Method to update last sync time
+// Instance method to update last sync time
 storeSchema.methods.updateLastSync = function() {
   this.lastSyncAt = new Date()
   return this.save()
+}
+
+// Static method to find active stores for user
+storeSchema.statics.findActiveStoresForUser = function(userId) {
+  return this.find({ userId, isActive: true }).sort({ connectedAt: -1 })
+}
+
+// Static method to get store with analytics (without access token)
+storeSchema.statics.findStoreWithAnalytics = function(storeId, userId) {
+  return this.findOne({ _id: storeId, userId, isActive: true })
+    .select('-accessToken') // Don't return access token for security
 }
 
 export const Store = mongoose.model('Store', storeSchema)
