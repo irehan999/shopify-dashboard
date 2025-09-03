@@ -312,6 +312,16 @@ const initiateAuth = asyncHandler(async (req, res) => {
     const randomState = Math.random().toString(36).substring(2, 15);
     const state = userId ? `user_${userId}_${randomState}` : randomState;
 
+    // ✅ Explicit scopes to ensure all required permissions are requested
+    const requestedScopes = [
+      'read_products',
+      'write_products',
+      'read_product_listings', 
+      'write_product_listings',
+      'read_files',
+      'write_files'
+    ];
+
     // ✅ Let Shopify handle the redirect directly (don't send JSON response)
     await shopify.auth.begin({
       shop: shopDomain,
@@ -320,6 +330,7 @@ const initiateAuth = asyncHandler(async (req, res) => {
       rawRequest: req,
       rawResponse: res,
       state,
+      scopes: requestedScopes, // Explicitly request all scopes
     });
 
     // Note: Don't send response here - shopify.auth.begin handles the redirect
@@ -349,10 +360,25 @@ const initiateAuth = asyncHandler(async (req, res) => {
         }
 
         // Use official Shopify API to handle callback - this creates and stores session automatically
-        const callbackResponse = await shopify.auth.callback({
-        rawRequest: req,
-        rawResponse: res,
-        });
+        let callbackResponse;
+        try {
+          callbackResponse = await shopify.auth.callback({
+            rawRequest: req,
+            rawResponse: res,
+          });
+        } catch (error) {
+          // Handle OAuth cookie not found error specifically
+          if (error.name === 'CookieNotFound') {
+            console.warn('OAuth cookie not found, redirecting back to install');
+            const shop = req.query.shop;
+            if (shop) {
+              // Redirect back to the install page for retry
+              const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+              return res.redirect(`${frontendUrl}/stores?error=oauth_retry&shop=${encodeURIComponent(shop)}`);
+            }
+          }
+          throw error;
+        }
 
         const { session } = callbackResponse;
         

@@ -276,6 +276,7 @@ const OAuthCallbackHandler = () => {
     const success = urlParams.get('success');
     const error = urlParams.get('error');
     const store = urlParams.get('store');
+    const shop = urlParams.get('shop');
 
     if (success === 'true') {
       setCallbackStatus({
@@ -288,6 +289,18 @@ const OAuthCallbackHandler = () => {
       
       // Auto-hide after 5 seconds
       setTimeout(() => setCallbackStatus(null), 5000);
+    } else if (error === 'oauth_retry') {
+      setCallbackStatus({
+        type: 'warning',
+        message: `OAuth setup incomplete for ${shop}. Click "Connect Store" again to retry.`,
+        retryShop: shop
+      });
+      
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname);
+      
+      // Auto-hide after 15 seconds (longer for retry message)
+      setTimeout(() => setCallbackStatus(null), 15000);
     } else if (error) {
       setCallbackStatus({
         type: 'error',
@@ -308,13 +321,22 @@ const OAuthCallbackHandler = () => {
     <div className={`fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 ${
       callbackStatus.type === 'success' 
         ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-200'
+        : callbackStatus.type === 'warning'
+        ? 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 text-yellow-800 dark:text-yellow-200'
         : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-200'
     }`}>
       <div className="flex items-center">
         <span className="mr-2">
-          {callbackStatus.type === 'success' ? '✅' : '❌'}
+          {callbackStatus.type === 'success' ? '✅' : callbackStatus.type === 'warning' ? '⚠️' : '❌'}
         </span>
-        {callbackStatus.message}
+        <div>
+          {callbackStatus.message}
+          {callbackStatus.retryShop && (
+            <div className="text-sm mt-1 opacity-75">
+              Shop: {callbackStatus.retryShop}
+            </div>
+          )}
+        </div>
         <button
           onClick={() => setCallbackStatus(null)}
           className="ml-4 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
