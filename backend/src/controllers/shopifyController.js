@@ -17,13 +17,12 @@ const registerWebhooks = async (session) => {
   try {
     const client = new shopify.clients.Graphql({ session });
     
+    // Product-first approach: only register app + product webhooks for now
     const webhookTopics = [
       'APP_UNINSTALLED',
       'PRODUCTS_CREATE', 
       'PRODUCTS_UPDATE',
-      'PRODUCTS_DELETE',
-      'ORDERS_CREATE',
-      'ORDERS_UPDATE'
+      'PRODUCTS_DELETE'
     ];
 
     // ✅ Fix: Use proper topic mapping instead of string replace
@@ -58,11 +57,9 @@ const registerWebhooks = async (session) => {
       }
     `;
 
-    const existingWebhooksResponse = await client.query({
-      data: { query: existingWebhooksQuery }
-    });
+  const existingWebhooksResponse = await client.request(existingWebhooksQuery, { retries: 2 });
 
-    const existingWebhooks = existingWebhooksResponse.body.data.webhookSubscriptions.edges.map(
+  const existingWebhooks = existingWebhooksResponse.data.webhookSubscriptions.edges.map(
       edge => ({
         topic: edge.node.topic,
         callbackUrl: edge.node.endpoint?.callbackUrl
@@ -78,10 +75,7 @@ const registerWebhooks = async (session) => {
         webhook => webhook.topic === topic && webhook.callbackUrl === callbackUrl
       );
 
-      if (webhookExists) {
-        console.log(`Webhook already exists for ${topic}, skipping...`);
-        continue;
-      }
+  if (webhookExists) continue;
       
       const mutation = `
         mutation webhookSubscriptionCreate($topic: WebhookSubscriptionTopic!, $webhookSubscription: WebhookSubscriptionInput!) {
@@ -112,16 +106,11 @@ const registerWebhooks = async (session) => {
         }
       };
 
-      const response = await client.query({
-        data: {
-          query: mutation,
-          variables: variables,
-        },
-      });
+      const response = await client.request(mutation, { variables, retries: 2 });
 
-      if (response.body.data.webhookSubscriptionCreate.userErrors.length > 0) {
-        console.error(`Webhook registration error for ${topic}:`, 
-          response.body.data.webhookSubscriptionCreate.userErrors);
+      const result = response.data.webhookSubscriptionCreate;
+      if (result.userErrors && result.userErrors.length > 0) {
+        console.error(`Webhook registration error for ${topic}:`, result.userErrors);
       } else {
         console.log(`Successfully registered webhook for ${topic}`);
       }
@@ -302,10 +291,10 @@ const validateSession = asyncHandler(async (req, res, next) => {
 const initiateAuth = asyncHandler(async (req, res) => {
   const { shop } = req.query;
 
+  console.log('user:', req.user);
   if (!shop) {
     throw new ApiError(400, 'Shop domain is required as query parameter');
   }
-  console.log('user: ', req.user);
   // Clean and validate shop domain
   let shopDomain = shop.trim().toLowerCase();
   if (!shopDomain.includes('.myshopify.com')) {
@@ -522,6 +511,22 @@ const disconnectStore = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'Store not found');
   }
 
+  // Attempt to uninstall the app from the Shopify store (remote disconnect)
+  try {
+    const session = await getStoreSession(store);
+    const client = new shopify.clients.Graphql({ session });
+    const UNINSTALL_MUTATION = `
+      mutation { appUninstall { userErrors { field message } } }
+    `;
+    const resp = await client.request(UNINSTALL_MUTATION);
+    const userErrors = resp.data?.appUninstall?.userErrors || [];
+    if (userErrors.length > 0) {
+      console.warn('App uninstall returned userErrors:', userErrors);
+    }
+  } catch (e) {
+    console.error('Failed to uninstall app from store (continuing to mark inactive):', e);
+  }
+
   // Mark as inactive instead of deleting (for audit trail)
   store.isActive = false;
   store.disconnectedAt = new Date();
@@ -535,6 +540,17 @@ const disconnectStore = asyncHandler(async (req, res) => {
   if (!userUpdateResult) {
     console.warn(`User ${userId} not found when disconnecting store ${storeId}`);
   }
+
+  // Best-effort: delete persisted session and clear token
+  try {
+    const sessionId = `offline_${store.shopDomain}`;
+    await shopify.config.sessionStorage.deleteSession(sessionId);
+  } catch (e) {
+    console.error('Failed to delete session after uninstall:', e);
+  }
+  try {
+    await Store.findByIdAndUpdate(storeId, { $unset: { accessToken: '' } });
+  } catch {}
 
   res.json(new ApiResponse(200, {}, 'Store disconnected successfully'));
 });
@@ -554,50 +570,12 @@ const getStoreAnalytics = asyncHandler(async (req, res) => {
   }
 
   try {
-    // Get or create session for this store
-    const session = await getStoreSession(store);
-    
-    const client = new shopify.clients.Rest({ session });
-
-    // Fetch analytics data
-    const [ordersResponse, productsResponse, customersResponse] = await Promise.all([
-      client.get({ path: 'orders', query: { limit: 250, status: 'any' } }),
-      client.get({ path: 'products/count' }),
-      client.get({ path: 'customers/count' })
-    ]);
-
-    // Calculate analytics
-    const orders = ordersResponse.body.orders || [];
-    const totalRevenue = orders.reduce((sum, order) => sum + parseFloat(order.total_price || 0), 0);
-    const totalOrders = orders.length;
-    const totalProducts = productsResponse.body.count || 0;
-    const totalCustomers = customersResponse.body.count || 0;
-
-    // Recent orders (last 30 days)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
-    const recentOrders = orders.filter(order => 
-      new Date(order.created_at) >= thirtyDaysAgo
-    );
-
-    const analytics = {
-      totalRevenue,
-      totalOrders,
-      totalProducts,
-      totalCustomers,
-      recentOrders: recentOrders.length,
-      averageOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0,
-      currency: store.shopData.currency,
+    // TODO: Implement analytics sync (counts/revenue). For now, return minimal info from store.shopData.
+    const minimal = {
+      currency: store.shopData?.currency,
       lastUpdated: new Date(),
     };
-
-    // Update cached analytics in store
-    store.analytics = analytics;
-    await store.save();
-
-    res.json(new ApiResponse(200, analytics, 'Store analytics retrieved'));
-
+    res.json(new ApiResponse(200, minimal, 'Analytics placeholder'));
   } catch (error) {
     console.error('Analytics fetch error:', error);
     throw new ApiError(500, 'Failed to fetch store analytics');
@@ -732,6 +710,14 @@ const handleAppUninstalled = asyncHandler(async (req, res) => {
       console.log(`App uninstalled from shop: ${shopDomain}`);
     }
 
+    // Clean up stored offline session if present
+    try {
+      const sessionId = `offline_${shopDomain}`;
+      await shopify.config.sessionStorage.deleteSession(sessionId);
+    } catch (e) {
+      console.warn('Failed to delete stored session on uninstall:', e?.message || e);
+    }
+
     res.status(200).send('OK');
   } catch (error) {
     console.error('Error handling app uninstall webhook:', error);
@@ -753,16 +739,8 @@ const handleProductCreate = asyncHandler(async (req, res) => {
   }
 
   try {
-    const product = req.body;
-    console.log(`New product created in ${shopDomain}:`, product.title);
-    
-    // Update store's product count
-    const store = await Store.findOne({ shopDomain, isActive: true });
-    if (store) {
-      store.analytics.totalProducts += 1;
-      store.analytics.lastUpdated = new Date();
-      await store.save();
-    }
+  // TODO: Update local product cache / counts when analytics sync is implemented
+  // const product = req.body;
 
     res.status(200).send('OK');
   } catch (error) {
@@ -785,9 +763,7 @@ const handleProductUpdate = asyncHandler(async (req, res) => {
   }
 
   try {
-    const product = req.body;
-    console.log(`Product updated in ${shopDomain}:`, product.title);
-    
+  // TODO: Update local product cache when analytics sync is implemented
     res.status(200).send('OK');
   } catch (error) {
     console.error('Error handling product update webhook:', error);
@@ -809,16 +785,7 @@ const handleProductDelete = asyncHandler(async (req, res) => {
   }
 
   try {
-    const product = req.body;
-    console.log(`Product deleted in ${shopDomain}:`, product.title);
-    
-    // Update store's product count
-    const store = await Store.findOne({ shopDomain, isActive: true });
-    if (store) {
-      store.analytics.totalProducts = Math.max(0, store.analytics.totalProducts - 1);
-      store.analytics.lastUpdated = new Date();
-      await store.save();
-    }
+  // TODO: Update local product cache / counts when analytics sync is implemented
 
     res.status(200).send('OK');
   } catch (error) {

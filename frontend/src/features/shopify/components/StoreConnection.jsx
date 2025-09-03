@@ -219,29 +219,21 @@ const StoreCard = ({ store, onDisconnect, onViewAnalytics }) => {
             Connected on {formatDate(store.connectedAt)}
           </p>
 
-          {/* Quick stats */}
-          {store.analytics && (
-            <div className="grid grid-cols-3 gap-4 mb-4">
-              <div className="text-center p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg">
-                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                  {store.analytics.totalOrders || 0}
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Orders</p>
-              </div>
-              <div className="text-center p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg">
-                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                  {formatCurrency(store.analytics.totalRevenue || 0, store.shopData?.currency)}
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Revenue</p>
-              </div>
-              <div className="text-center p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg">
-                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                  {store.analytics.totalProducts || 0}
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Products</p>
-              </div>
+          {/* Basic details only for now; analytics to be implemented later */}
+          <div className="grid grid-cols-2 gap-4 mb-2">
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              Domain: <span className="font-medium">{store.shopDomain}</span>
             </div>
-          )}
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              Email: <span className="font-medium">{store.shopEmail || '—'}</span>
+            </div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              Plan: <span className="font-medium">{store.shopData?.plan || '—'}</span>
+            </div>
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              Currency: <span className="font-medium">{store.shopData?.currency || '—'}</span>
+            </div>
+          </div>
         </div>
 
         <div className="flex space-x-2 ml-4">

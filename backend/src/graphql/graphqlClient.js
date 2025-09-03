@@ -20,20 +20,15 @@ export const executeGraphQL = async (session, query, variables = {}) => {
 
   try {
     const client = new shopify.clients.Graphql({ session });
-    const response = await client.query({ 
-      data: { 
-        query, 
-        variables 
-      } 
-    });
+    const response = await client.request(query, { variables, retries: 2 });
     
     // Handle GraphQL errors
-    if (response.body.errors && response.body.errors.length > 0) {
-      console.error('GraphQL Errors:', response.body.errors);
-      throw new GraphqlQueryError('GraphQL operation failed', response.body.errors);
+    if (response.errors && response.errors.length > 0) {
+      console.error('GraphQL Errors:', response.errors);
+      throw new GraphqlQueryError('GraphQL operation failed', response.errors);
     }
     
-    return response.body.data;
+    return response.data;
   } catch (error) {
     console.error('GraphQL Operation Error:', {
       message: error.message,
