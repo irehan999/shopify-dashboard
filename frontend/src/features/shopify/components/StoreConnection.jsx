@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { Plus, Store, Settings, BarChart3, ExternalLink, Trash2, Link as LinkIcon } from 'lucide-react';
+import { Plus, Store, BarChart3, ExternalLink, Trash2, Link as LinkIcon, Loader2, AlertTriangle, X } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import { useConnectedStores, useInitiateShopifyAuth, useDisconnectStore, useLinkStore } from '../api/shopifyApi';
 
 const StoreConnection = () => {
   const [shopDomain, setShopDomain] = useState('');
-  const [isConnecting, setIsConnecting] = useState(false);
+  const [confirmDisconnect, setConfirmDisconnect] = useState(null);
 
   const { data: stores = [], isLoading, error } = useConnectedStores();
   const initiateAuthMutation = useInitiateShopifyAuth();
@@ -20,31 +21,56 @@ const handleConnect = async (e) => {
   e.preventDefault();
   if (!shopDomain.trim()) return;
 
-  setIsConnecting(true);
   try {
     const cleaned = shopDomain.trim().toLowerCase();
     const fullDomain = cleaned.includes('.myshopify.com') ? cleaned : `${cleaned}.myshopify.com`;
+    
+    // Show loading toast
+    const loadingToast = toast.loading('Initiating store connection...');
+    
     await initiateAuthMutation.mutateAsync(fullDomain);
+    
+    // This won't execute because browser redirects, but good to have
+    toast.dismiss(loadingToast);
   } catch (error) {
     console.error('Failed to initiate OAuth:', error);
-    setIsConnecting(false);
+    toast.error('Failed to start connection process. Please try again.');
   }
   // After mutateAsync completes, browser will redirect to OAuth
 };
 
+  const handleDisconnectClick = (storeId, shopName) => {
+    setConfirmDisconnect({ storeId, shopName });
+  };
 
-  const handleDisconnect = async (storeId, shopName) => {
-    if (window.confirm(`Are you sure you want to disconnect ${shopName}?`)) {
-      try {
-        await disconnectStore.mutateAsync(storeId);
-      } catch (error) {
-        console.error('Disconnect failed:', error);
-      }
+  const handleDisconnectConfirm = async () => {
+    if (!confirmDisconnect) return;
+    
+    const { storeId, shopName } = confirmDisconnect;
+    
+    try {
+      await disconnectStore.mutateAsync(storeId);
+      toast.success(`${shopName} disconnected successfully`);
+      setConfirmDisconnect(null);
+    } catch (error) {
+      console.error('Disconnect failed:', error);
+      toast.error('Failed to disconnect store. Please try again.');
     }
   };
 
-  const formatShopDomain = (domain) => {
-    return domain.replace('.myshopify.com', '');
+  const handleLinkStore = async () => {
+    if (!pendingToken) return;
+    
+    try {
+      await linkStore.mutateAsync(pendingToken);
+      toast.success(`${pendingShop} linked successfully!`);
+      
+      // Clean URL without showing success message again
+      window.history.replaceState({}, '', window.location.pathname);
+    } catch (error) {
+      console.error('Manual link from Stores failed:', error);
+      toast.error('Failed to link store. Please try again.');
+    }
   };
 
   if (isLoading) {
@@ -63,29 +89,31 @@ const handleConnect = async (e) => {
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-2 max-w-6xl mx-auto">
       {pendingToken && (
         <div className="mb-4 p-4 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20 flex items-center justify-between">
           <div>
             <p className="text-blue-800 dark:text-blue-200 font-medium">Store link pending</p>
-            <p className="text-sm text-blue-700 dark:text-blue-300">A connection for <span className="font-semibold">{pendingShop}</span> is ready to link to your account.</p>
+            <p className="text-sm text-blue-700 dark:text-blue-300">
+              A connection for <span className="font-semibold">{pendingShop}</span> is ready to link to your account.
+            </p>
           </div>
           <button
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md flex items-center gap-2 disabled:opacity-50"
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-md flex items-center gap-2"
             disabled={linkStore.isPending}
-            onClick={async () => {
-              try {
-                await linkStore.mutateAsync(pendingToken);
-                // Clean URL and show success
-                const newUrl = window.location.pathname + '?success=true&store=' + encodeURIComponent(pendingShop || 'store');
-                window.history.replaceState({}, '', newUrl);
-                // Optionally trigger a reload of stores via React Query invalidation occurs in hook
-              } catch (e) {
-                console.error('Manual link from Stores failed:', e);
-              }
-            }}
+            onClick={handleLinkStore}
           >
-            <LinkIcon className="h-4 w-4" /> {linkStore.isPending ? 'Linking…' : 'Link now'}
+            {linkStore.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Linking...
+              </>
+            ) : (
+              <>
+                <LinkIcon className="h-4 w-4" />
+                Link now
+              </>
+            )}
           </button>
         </div>
       )}
@@ -118,7 +146,7 @@ const handleConnect = async (e) => {
                 value={shopDomain}
                 onChange={(e) => setShopDomain(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled={isConnecting}
+                disabled={initiateAuthMutation.isPending}
               />
               <span className="absolute right-3 top-2 text-gray-500 dark:text-gray-400 text-sm">
                 .myshopify.com
@@ -128,10 +156,17 @@ const handleConnect = async (e) => {
           <div className="flex items-end">
             <button
               type="submit"
-              disabled={isConnecting || !shopDomain.trim()}
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+              disabled={initiateAuthMutation.isPending || !shopDomain.trim()}
+              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex items-center gap-2"
             >
-              {isConnecting ? 'Connecting...' : 'Connect Store'}
+              {initiateAuthMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Connecting...
+                </>
+              ) : (
+                'Connect Store'
+              )}
             </button>
           </div>
         </form>
@@ -164,7 +199,8 @@ const handleConnect = async (e) => {
             <StoreCard
               key={store._id}
               store={store}
-              onDisconnect={() => handleDisconnect(store._id, store.shopName)}
+              onDisconnect={() => handleDisconnectClick(store._id, store.shopName)}
+              isDisconnecting={disconnectStore.isPending}
               onViewAnalytics={() => {
                 // Navigate to analytics page
                 window.location.href = `/stores/${store._id}/analytics`;
@@ -176,18 +212,25 @@ const handleConnect = async (e) => {
 
       {/* OAuth callback success/error handling */}
       <OAuthCallbackHandler />
+
+      {/* Confirmation Modal */}
+      {confirmDisconnect && (
+        <ConfirmationModal
+          isOpen={true}
+          title="Disconnect Store"
+          message={`Are you sure you want to disconnect ${confirmDisconnect.shopName}? This action cannot be undone.`}
+          confirmLabel="Disconnect"
+          confirmStyle="danger"
+          isLoading={disconnectStore.isPending}
+          onConfirm={handleDisconnectConfirm}
+          onCancel={() => setConfirmDisconnect(null)}
+        />
+      )}
     </div>
   );
 };
 
-const StoreCard = ({ store, onDisconnect, onViewAnalytics }) => {
-  const formatCurrency = (amount, currency = 'USD') => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency || 'USD'
-    }).format(amount);
-  };
-
+const StoreCard = ({ store, onDisconnect, onViewAnalytics, isDisconnecting }) => {
   const formatDate = (date) => {
     return new Date(date).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -257,11 +300,84 @@ const StoreCard = ({ store, onDisconnect, onViewAnalytics }) => {
           
           <button
             onClick={onDisconnect}
-            className="p-2 text-gray-400 hover:text-red-600 dark:text-gray-500 dark:hover:text-red-400 transition-colors"
+            disabled={isDisconnecting}
+            className="p-2 text-gray-400 hover:text-red-600 dark:text-gray-500 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             title="Disconnect Store"
           >
-            <Trash2 className="h-5 w-5" />
+            {isDisconnecting ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <Trash2 className="h-5 w-5" />
+            )}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ConfirmationModal = ({ 
+  isOpen, 
+  title, 
+  message, 
+  confirmLabel = 'Confirm', 
+  cancelLabel = 'Cancel',
+  confirmStyle = 'primary', // 'primary' | 'danger'
+  isLoading = false,
+  onConfirm, 
+  onCancel 
+}) => {
+  if (!isOpen) return null;
+
+  const confirmButtonClasses = confirmStyle === 'danger'
+    ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500'
+    : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500';
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      {/* Backdrop */}
+      <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity" onClick={onCancel} />
+      
+      {/* Modal */}
+      <div className="flex min-h-full items-center justify-center p-4">
+        <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
+          {/* Header */}
+          <div className="flex items-center mb-4">
+            <AlertTriangle className="h-6 w-6 text-orange-500 mr-3" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              {title}
+            </h3>
+          </div>
+          
+          {/* Message */}
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
+            {message}
+          </p>
+          
+          {/* Actions */}
+          <div className="flex justify-end space-x-3">
+            <button
+              onClick={onCancel}
+              disabled={isLoading}
+              className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors disabled:opacity-50"
+            >
+              {cancelLabel}
+            </button>
+            <button
+              onClick={onConfirm}
+              disabled={isLoading}
+              className={`px-4 py-2 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 ${confirmButtonClasses}`}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                confirmLabel
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -279,32 +395,16 @@ const OAuthCallbackHandler = () => {
     const shop = urlParams.get('shop');
 
     if (success === 'true') {
-      setCallbackStatus({
-        type: 'success',
-        message: `Successfully connected ${store || 'store'}!`
-      });
+      toast.success(`Successfully connected ${store || 'store'}!`);
       
       // Clean up URL
       window.history.replaceState({}, '', window.location.pathname);
       
-      // Auto-hide after 5 seconds
-      setTimeout(() => setCallbackStatus(null), 5000);
     } else if (error === 'oauth_retry') {
       setCallbackStatus({
         type: 'warning',
-        message: `OAuth setup incomplete for ${shop}. Click "Connect Store" again to retry.`,
+        message: `OAuth setup incomplete for ${shop}. Please try connecting again.`,
         retryShop: shop
-      });
-      
-      // Clean up URL
-      window.history.replaceState({}, '', window.location.pathname);
-      
-      // Auto-hide after 15 seconds (longer for retry message)
-      setTimeout(() => setCallbackStatus(null), 15000);
-    } else if (error) {
-      setCallbackStatus({
-        type: 'error',
-        message: 'Failed to connect store. Please try again.'
       });
       
       // Clean up URL
@@ -312,36 +412,44 @@ const OAuthCallbackHandler = () => {
       
       // Auto-hide after 10 seconds
       setTimeout(() => setCallbackStatus(null), 10000);
+    } else if (error === 'auto_link_failed') {
+      toast.error('Failed to automatically link store. Please try manual linking.');
+      
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (error) {
+      toast.error('Failed to connect store. Please try again.');
+      
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
 
   if (!callbackStatus) return null;
 
   return (
-    <div className={`fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 ${
-      callbackStatus.type === 'success' 
-        ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-200'
-        : callbackStatus.type === 'warning'
+    <div className={`fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 max-w-sm ${
+      callbackStatus.type === 'warning'
         ? 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 text-yellow-800 dark:text-yellow-200'
         : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-200'
     }`}>
-      <div className="flex items-center">
-        <span className="mr-2">
-          {callbackStatus.type === 'success' ? '✅' : callbackStatus.type === 'warning' ? '⚠️' : '❌'}
-        </span>
-        <div>
-          {callbackStatus.message}
-          {callbackStatus.retryShop && (
-            <div className="text-sm mt-1 opacity-75">
-              Shop: {callbackStatus.retryShop}
-            </div>
-          )}
+      <div className="flex items-start justify-between">
+        <div className="flex items-start">
+          <AlertTriangle className="h-5 w-5 mt-0.5 mr-3 flex-shrink-0" />
+          <div>
+            <p className="font-medium">{callbackStatus.message}</p>
+            {callbackStatus.retryShop && (
+              <p className="text-sm mt-1 opacity-75">
+                Shop: {callbackStatus.retryShop}
+              </p>
+            )}
+          </div>
         </div>
         <button
           onClick={() => setCallbackStatus(null)}
-          className="ml-4 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+          className="ml-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
         >
-          ×
+          <X className="h-4 w-4" />
         </button>
       </div>
     </div>

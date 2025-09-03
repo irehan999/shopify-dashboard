@@ -368,8 +368,14 @@ const initiateAuth = asyncHandler(async (req, res) => {
           });
         } catch (error) {
           // Handle OAuth cookie not found error specifically
-          if (error.name === 'CookieNotFound') {
-            console.warn('OAuth cookie not found, redirecting back to install');
+          console.warn('OAuth callback error:', {
+            name: error.name,
+            message: error.message,
+            query: req.query
+          });
+          
+          if (error.name === 'CookieNotFound' || error.message?.includes('cookie') || error.message?.includes('state')) {
+            console.warn('OAuth cookie/state issue detected, redirecting for retry');
             const shop = req.query.shop;
             if (shop) {
               // Redirect back to the install page for retry
@@ -377,6 +383,16 @@ const initiateAuth = asyncHandler(async (req, res) => {
               return res.redirect(`${frontendUrl}/stores?error=oauth_retry&shop=${encodeURIComponent(shop)}`);
             }
           }
+          
+          // For other OAuth errors, also try to provide meaningful feedback
+          if (error.message?.includes('Invalid') || error.message?.includes('expired')) {
+            const shop = req.query.shop;
+            if (shop) {
+              const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+              return res.redirect(`${frontendUrl}/stores?error=oauth_retry&shop=${encodeURIComponent(shop)}`);
+            }
+          }
+          
           throw error;
         }
 
