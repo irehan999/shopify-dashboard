@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Plus, Store, Settings, BarChart3, ExternalLink, Trash2 } from 'lucide-react';
-import { useConnectedStores, useInitiateShopifyAuth, useDisconnectStore } from '../api/shopifyApi';
+import React, { useMemo, useState } from 'react';
+import { Plus, Store, Settings, BarChart3, ExternalLink, Trash2, Link as LinkIcon } from 'lucide-react';
+import { useConnectedStores, useInitiateShopifyAuth, useDisconnectStore, useLinkStore } from '../api/shopifyApi';
 
 const StoreConnection = () => {
   const [shopDomain, setShopDomain] = useState('');
@@ -9,6 +9,12 @@ const StoreConnection = () => {
   const { data: stores = [], isLoading, error } = useConnectedStores();
   const initiateAuthMutation = useInitiateShopifyAuth();
   const disconnectStore = useDisconnectStore();
+  const linkStore = useLinkStore();
+
+  // Detect a pending link token in query params as a manual fallback
+  const urlParams = useMemo(() => new URLSearchParams(window.location.search), []);
+  const pendingToken = urlParams.get('token');
+  const pendingShop = urlParams.get('shop');
 
 const handleConnect = async (e) => {
   e.preventDefault();
@@ -58,6 +64,31 @@ const handleConnect = async (e) => {
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
+      {pendingToken && (
+        <div className="mb-4 p-4 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20 flex items-center justify-between">
+          <div>
+            <p className="text-blue-800 dark:text-blue-200 font-medium">Store link pending</p>
+            <p className="text-sm text-blue-700 dark:text-blue-300">A connection for <span className="font-semibold">{pendingShop}</span> is ready to link to your account.</p>
+          </div>
+          <button
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md flex items-center gap-2 disabled:opacity-50"
+            disabled={linkStore.isPending}
+            onClick={async () => {
+              try {
+                await linkStore.mutateAsync(pendingToken);
+                // Clean URL and show success
+                const newUrl = window.location.pathname + '?success=true&store=' + encodeURIComponent(pendingShop || 'store');
+                window.history.replaceState({}, '', newUrl);
+                // Optionally trigger a reload of stores via React Query invalidation occurs in hook
+              } catch (e) {
+                console.error('Manual link from Stores failed:', e);
+              }
+            }}
+          >
+            <LinkIcon className="h-4 w-4" /> {linkStore.isPending ? 'Linking…' : 'Link now'}
+          </button>
+        </div>
+      )}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
           Connected Stores

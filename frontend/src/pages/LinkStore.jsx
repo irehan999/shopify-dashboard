@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -22,8 +22,9 @@ const schema = z.object({
 export default function LinkStore() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, user } = useAuthStore()
   const [showPassword, setShowPassword] = useState(false)
+  const [autoTried, setAutoTried] = useState(false)
 
   const params = useMemo(() => new URLSearchParams(location.search), [location.search])
   const token = params.get('token') || ''
@@ -39,17 +40,21 @@ export default function LinkStore() {
   })
 
   useEffect(() => {
-    // If already authenticated, just link using token
+    // If already authenticated, just link using token (run once)
     const autoLink = async () => {
-      if (isAuthenticated && token) {
+      if (!autoTried && isAuthenticated && token) {
+        setAutoTried(true)
         try {
           await linkMutation.mutateAsync(token)
           navigate('/stores?success=true&store=' + encodeURIComponent(shop), { replace: true })
-        } catch {}
+        } catch (e) {
+          // Stay on page; user can try manual link
+          console.error('Auto link failed:', e)
+        }
       }
     }
     autoLink()
-  }, [isAuthenticated, token, shop])
+  }, [isAuthenticated, token, shop, autoTried])
 
   const onSubmit = async (data) => {
     try {
@@ -81,11 +86,40 @@ export default function LinkStore() {
             <Store className="h-5 w-5" /> Connect your store
           </CardTitle>
           <CardDescription className="text-center">
-            Complete sign in to link <span className="font-medium">{shop}</span> to your account
+            {token ? (
+              <>Complete sign in to link <span className="font-medium">{shop}</span> to your account</>
+            ) : (
+              <span className="text-red-600">Missing or invalid link token. Please restart the connection from Stores.</span>
+            )}
           </CardDescription>
         </CardHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)}>
+        {/* If user is already logged in, provide a manual Link Now button */}
+        {isAuthenticated && token ? (
+          <CardContent>
+            <div className="space-y-4 text-center">
+              <p className="text-gray-700">You're signed in as <span className="font-medium">{user?.email}</span>.</p>
+              <Button
+                onClick={async () => {
+                  try {
+                    await linkMutation.mutateAsync(token)
+                    navigate('/stores?success=true&store=' + encodeURIComponent(shop), { replace: true })
+                  } catch (e) {
+                    console.error('Manual link failed:', e)
+                  }
+                }}
+                className="w-full"
+                disabled={busy}
+              >
+                {busy ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />Linking…</>) : 'Link store now'}
+              </Button>
+            </div>
+          </CardContent>
+        ) : null}
+
+        {/* Show auth form when not authenticated and have a token */}
+        {!isAuthenticated && (
+          <form onSubmit={handleSubmit(onSubmit)}>
           <CardContent className="space-y-4">
             <Field>
               <Label className="text-sm font-medium">Email</Label>
@@ -127,7 +161,19 @@ export default function LinkStore() {
               {busy ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />Connecting…</>) : 'Continue'}
             </Button>
           </CardFooter>
-        </form>
+          </form>
+        )}
+
+        {/* Helpful links preserving the token in case user navigates to login/signup */}
+        {!isAuthenticated && token && (
+          <CardFooter className="flex flex-col gap-2">
+            <p className="text-xs text-gray-500 text-center">Already have an account?</p>
+            <div className="flex justify-center gap-4 text-sm">
+              <Link to={`/auth/login?next=${encodeURIComponent(`/link-store?token=${token}&shop=${shop}`)}`} className="text-blue-600 hover:underline">Sign in</Link>
+              <Link to={`/auth/signup?next=${encodeURIComponent(`/link-store?token=${token}&shop=${shop}`)}`} className="text-blue-600 hover:underline">Create account</Link>
+            </div>
+          </CardFooter>
+        )}
       </Card>
     </div>
   )

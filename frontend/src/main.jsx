@@ -27,9 +27,10 @@ const router = createBrowserRouter(
   createRoutesFromElements(
     <>
       {/* Auth routes (public) */}
-      <Route path="/auth/login" element={<PublicRoute><Login /></PublicRoute>} />
-      <Route path="/auth/signup" element={<PublicRoute><Signup /></PublicRoute>} />
-  <Route path="/link-store" element={<PublicRoute><LinkStore /></PublicRoute>} />
+  <Route path="/auth/login" element={<PublicRoute><Login /></PublicRoute>} />
+  <Route path="/auth/signup" element={<PublicRoute><Signup /></PublicRoute>} />
+  {/* Link store must be accessible whether user is logged in or not, so do NOT wrap in PublicRoute */}
+  <Route path="/link-store" element={<LinkStore />} />
       
       {/* Protected routes */}
       <Route path="/" element={<AuthGuard><Layout /></AuthGuard>}>
