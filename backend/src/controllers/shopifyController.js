@@ -1,9 +1,11 @@
 
 import { User } from '../models/User.js';
 import { Store } from '../models/Store.js';
+import { StoreLink } from '../models/StoreLink.js';
+import crypto from 'crypto';
 
 // Import Shopify configuration
-import shopify, { getSessionFromRequest, validateWebhook } from '../config/shopify.js';
+import shopify, { getSessionFromRequest, createSession, validateWebhook } from '../config/shopify.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import asyncHandler from '../utils/AsyncHanlde.js';
@@ -131,28 +133,160 @@ const registerWebhooks = async (session) => {
 };
 
 /**
+ * Exchange session token for access token (for embedded apps)
+ * POST /api/shopify/token-exchange
+ */
+const exchangeSessionToken = asyncHandler(async (req, res) => {
+  const { sessionToken } = req.body;
+  
+  if (!sessionToken) {
+    throw new ApiError(400, 'Session token is required');
+  }
+
+  try {
+    // Verify and decode session token
+    const decodedToken = shopify.session.decodeSessionToken(sessionToken);
+    const shop = decodedToken.dest.replace('https://', '');
+
+    // Exchange session token for access token
+    const session = await shopify.auth.tokenExchange({
+      sessionToken,
+      shop,
+      requestedTokenType: 'urn:shopify:params:oauth:token-type:offline-access-token'
+    });
+
+    if (!session) {
+      throw new ApiError(400, 'Failed to exchange session token');
+    }
+
+    // Store the session
+    await shopify.config.sessionStorage.storeSession(session);
+
+    // Find or create store record
+    let store = await Store.findOne({ shopDomain: shop });
+    
+    if (!store) {
+      // Get shop info
+      const client = new shopify.clients.Rest({ session });
+      const shopResponse = await client.get({ path: 'shop' });
+      const shopInfo = shopResponse.body.shop;
+
+      // Create new store record
+      store = await Store.create({
+        shopDomain: shop,
+        shopName: shopInfo.name,
+        shopEmail: shopInfo.email,
+        accessToken: session.accessToken,
+        scopes: session.scope ? session.scope.split(',') : [],
+        isActive: true,
+        connectedAt: new Date(),
+        shopData: {
+          id: shopInfo.id,
+          currency: shopInfo.currency,
+          timezone: shopInfo.iana_timezone,
+          plan: shopInfo.plan_name,
+          country: shopInfo.country,
+          province: shopInfo.province,
+          city: shopInfo.city,
+          address: shopInfo.address1,
+          zip: shopInfo.zip,
+          phone: shopInfo.phone,
+        },
+        lastSyncAt: new Date(),
+        syncStatus: 'completed'
+      });
+    } else {
+      // Update existing store
+      store.accessToken = session.accessToken;
+      store.scopes = session.scope ? session.scope.split(',') : [];
+      store.isActive = true;
+      store.lastSyncAt = new Date();
+      await store.save();
+    }
+
+    res.json(new ApiResponse(200, { 
+      sessionId: session.id,
+      shop: session.shop,
+      storeId: store._id 
+    }, 'Session token exchanged successfully'));
+
+  } catch (error) {
+    console.error('Token exchange error:', error);
+    throw new ApiError(500, 'Failed to exchange session token');
+  }
+});
+
+/**
+ * Get or create session for store operations
+ */
+const getStoreSession = async (store) => {
+  try {
+    // Try to get existing session from MongoDB storage
+    const sessionId = `offline_${store.shopDomain}`;
+    let session = await shopify.config.sessionStorage.loadSession(sessionId);
+    
+    if (session && session.accessToken) {
+      // Validate session is still working
+      try {
+        const client = new shopify.clients.Rest({ session });
+        await client.get({ path: 'shop' });
+        return session;
+      } catch (error) {
+        console.log('Existing session invalid, will create new one');
+      }
+    }
+    
+    // Create new session using stored access token
+    session = await createSession(
+      store.shopDomain,
+      store.accessToken,
+      store.scopes
+    );
+    
+    return session;
+  } catch (error) {
+    console.error('Error getting/creating store session:', error);
+    throw new ApiError(500, 'Failed to create store session');
+  }
+};
+
+
+/**
  * Validate authenticated session middleware
  */
 const validateSession = asyncHandler(async (req, res, next) => {
   try {
+    // Get session from request
     const session = await getSessionFromRequest(req, res);
     
-    if (!session) {
-      throw new ApiError(401, 'No valid session found');
+    if (!session || !session.accessToken) {
+      throw new ApiError(401, 'No valid session found or missing access token');
     }
 
-    // Check if session is still valid
+    // Load session from MongoDB storage
+    const storedSession = await shopify.config.sessionStorage.loadSession(session.id);
+    if (!storedSession) {
+      throw new ApiError(401, 'Session not found in storage');
+    }
+
+    // (Optional) extra consistency check
+    if (storedSession.shop !== session.shop) {
+      throw new ApiError(401, 'Session shop mismatch');
+    }
+
+    // Ensure store exists in DB
     const store = await Store.findOne({ 
-      shopDomain: session.shop, 
+      shopDomain: storedSession.shop, 
       isActive: true 
     });
-
     if (!store) {
       throw new ApiError(401, 'Store not found or inactive');
     }
 
-    req.session = session;
+    // Attach validated session + store to request
+    req.session = storedSession;
     req.store = store;
+
     next();
   } catch (error) {
     console.error('Session validation error:', error);
@@ -160,173 +294,205 @@ const validateSession = asyncHandler(async (req, res, next) => {
   }
 });
 
+
 /**
- * Initiate OAuth flow using official Shopify API
- * POST /api/shopify/auth
+ * Initiate OAuth flow with proper user context and state management
+ * GET /api/shopify/auth?shop=store.myshopify.com
  */
 const initiateAuth = asyncHandler(async (req, res) => {
-  const { shop } = req.body;
-  const userId = req.user._id;
+  const { shop } = req.query;
 
   if (!shop) {
-    throw new ApiError(400, 'Shop domain is required');
+    throw new ApiError(400, 'Shop domain is required as query parameter');
   }
-
+  console.log('user: ', req.user);
   // Clean and validate shop domain
   let shopDomain = shop.trim().toLowerCase();
   if (!shopDomain.includes('.myshopify.com')) {
     shopDomain = `${shopDomain}.myshopify.com`;
   }
 
-  // Validate shop domain format
   const shopRegex = /^[a-zA-Z0-9][a-zA-Z0-9\-]*\.myshopify\.com$/;
   if (!shopRegex.test(shopDomain)) {
     throw new ApiError(400, 'Invalid shop domain format');
   }
 
   try {
-    // Use official Shopify API to begin OAuth
-    const authRoute = await shopify.auth.begin({
+    // Create state with user ID for callback validation
+    const userId = req.user?._id?.toString();
+    const randomState = Math.random().toString(36).substring(2, 15);
+    const state = userId ? `user_${userId}_${randomState}` : randomState;
+
+    // ✅ Let Shopify handle the redirect directly (don't send JSON response)
+    await shopify.auth.begin({
       shop: shopDomain,
       callbackPath: '/api/shopify/callback',
-      isOnline: false, // Use offline tokens for persistent access
+      isOnline: false,
       rawRequest: req,
       rawResponse: res,
+      state,
     });
 
-    // Store user info in session for callback
-    req.session.shopifyAuth = {
-      userId,
-      shop: shopDomain,
-      initiated: new Date()
-    };
-
-    res.json(new ApiResponse(200, { authUrl: authRoute }, 'OAuth URL generated'));
-    
+    // Note: Don't send response here - shopify.auth.begin handles the redirect
   } catch (error) {
     console.error('OAuth initiation error:', error);
     throw new ApiError(500, 'Failed to initiate OAuth flow');
   }
 });
 
+
 /**
- * Handle OAuth callback using official Shopify API
+ * Handle OAuth callback with proper state validation and user context
  * GET /api/shopify/callback
  */
-const handleCallback = asyncHandler(async (req, res) => {
-  try {
-    // Use official Shopify API to handle callback
-    const callbackResponse = await shopify.auth.callback({
-      rawRequest: req,
-      rawResponse: res,
-    });
-
-    const { session } = callbackResponse;
-    
-    if (!session) {
-      throw new ApiError(400, 'Failed to create session');
-    }
-
-    // Get stored user info from session
-    const storedAuth = req.session.shopifyAuth;
-    if (!storedAuth) {
-      throw new ApiError(400, 'No authentication session found');
-    }
-
-    // Get shop information using the session
-    const client = new shopify.clients.Rest({ session });
-    const shopResponse = await client.get({
-      path: 'shop',
-    });
-
-    const shopInfo = shopResponse.body.shop;
-
-    // Save or update store in database
-    const storeData = {
-      userId: storedAuth.userId,
-      shopDomain: session.shop,
-      shopName: shopInfo.name,
-      shopEmail: shopInfo.email,
-      accessToken: session.accessToken,
-      // ✅ Fix: Handle both comma and space separated scopes
-      scopes: session.scope ? session.scope.split(/[,\s]+/).filter(s => s.length > 0) : [],
-      isActive: true,
-      connectedAt: new Date(),
-      shopData: {
-        id: shopInfo.id,
-        currency: shopInfo.currency,
-        timezone: shopInfo.iana_timezone,
-        plan: shopInfo.plan_name,
-        country: shopInfo.country,
-        province: shopInfo.province,
-        city: shopInfo.city,
-        address: shopInfo.address1,
-        zip: shopInfo.zip,
-        phone: shopInfo.phone,
-      },
-      lastSyncAt: new Date(),
-      syncStatus: 'completed'
-    };
-
-    let store = await Store.findOne({ 
-      userId: storedAuth.userId, 
-      shopDomain: session.shop 
-    });
-
-    if (store) {
-      // Update existing store
-      Object.assign(store, storeData);
-      await store.save();
-    } else {
-      // ✅ Fix: Verify user exists before creating store to prevent orphaned stores
-      const userExists = await User.findById(storedAuth.userId);
-      if (!userExists) {
-        throw new ApiError(404, 'User not found. Cannot create store.');
-      }
-
-      // Create new store
-      store = await Store.create(storeData);
-      
-      // Increment user's connected stores count
-      const userUpdateResult = await User.findByIdAndUpdate(storedAuth.userId, {
-        $inc: { connectedStores: 1 }
-      });
-
-      if (!userUpdateResult) {
-        // If user update fails, clean up the store to prevent orphaned data
-        await Store.findByIdAndDelete(store._id);
-        throw new ApiError(500, 'Failed to update user store count');
-      }
-    }
-
-    // Register webhooks after successful connection
+    const handleCallback = asyncHandler(async (req, res) => {
     try {
-      await registerWebhooks(session);
-    } catch (webhookError) {
-      console.error('Webhook registration error:', webhookError);
-      // Don't fail the entire flow for webhook errors
+        // Validate state parameter to extract user ID
+        const { state } = req.query;
+        let userId = null;
+        
+        if (state && state.startsWith('user_')) {
+        const userIdMatch = state.match(/^user_([^_]+)_/);
+        if (userIdMatch) {
+            userId = userIdMatch[1];
+            console.log('User ID extracted from state:', userId);
+        }
+        }
+
+        // Use official Shopify API to handle callback - this creates and stores session automatically
+        const callbackResponse = await shopify.auth.callback({
+        rawRequest: req,
+        rawResponse: res,
+        });
+
+        const { session } = callbackResponse;
+        
+        if (!session || !session.accessToken) {
+        throw new ApiError(400, 'Failed to create session or obtain access token');
+        }
+
+        console.log('OAuth session created:', {
+        id: session.id,
+        shop: session.shop,
+        isOnline: session.isOnline,
+        scope: session.scope,
+        hasToken: !!session.accessToken
+        });
+
+        // Use REST client only for testing/getting shop info
+        const client = new shopify.clients.Rest({ session });
+        const shopResponse = await client.get({
+        path: 'shop',
+        });
+
+        const shopInfo = shopResponse.body.shop;
+
+        // Save or update store in database with user context
+        const storeData = {
+        userId: userId, // From state parameter
+        shopDomain: session.shop,
+        shopName: shopInfo.name,
+        shopEmail: shopInfo.email,
+        accessToken: session.accessToken,
+        sessionId: session.id,
+        scopes: session.scope ? session.scope.split(/[,\s]+/).filter(s => s.length > 0) : [],
+        isActive: true,
+        connectedAt: new Date(),
+        shopData: {
+            id: shopInfo.id,
+            currency: shopInfo.currency,
+            timezone: shopInfo.iana_timezone,
+            plan: shopInfo.plan_name,
+            country: shopInfo.country,
+            province: shopInfo.province,
+            city: shopInfo.city,
+            address: shopInfo.address1,
+            zip: shopInfo.zip,
+            phone: shopInfo.phone,
+        },
+        lastSyncAt: new Date(),
+        syncStatus: 'completed'
+        };
+
+    let store;
+        
+    if (userId) {
+        // Find existing store for this user and shop
+        store = await Store.findOne({ 
+            userId: userId, 
+            shopDomain: session.shop 
+        });
+
+        if (store) {
+            // Update existing store
+            Object.assign(store, storeData);
+            await store.save();
+        } else {
+            // ✅ Fix: Verify user exists before creating store to prevent orphaned stores
+            const userExists = await User.findById(userId);
+            if (!userExists) {
+            throw new ApiError(404, 'User not found. Cannot create store.');
+            }
+
+            // Create new store
+            store = await Store.create(storeData);
+            
+            // Increment user's connected stores count
+            const userUpdateResult = await User.findByIdAndUpdate(userId, {
+            $inc: { connectedStores: 1 }
+            });
+
+            if (!userUpdateResult) {
+            // If user update fails, clean up the store to prevent orphaned data
+            await Store.findByIdAndDelete(store._id);
+            throw new ApiError(500, 'Failed to update user store count');
+            }
+        }
+        } else {
+        // Guest install or install launched from Shopify admin where our cookie/user isn't present.
+        // Create a short-lived StoreLink token to let the user bind this store after login/signup.
+        const token = crypto.randomBytes(24).toString('hex');
+        const expiresAt = new Date(Date.now() + 1000 * 60 * 15); // 15 min
+
+        await StoreLink.create({
+            token,
+            shopDomain: session.shop,
+            shopName: shopInfo.name,
+            shopEmail: shopInfo.email,
+            sessionId: session.id,
+            accessToken: session.accessToken,
+            scopes: storeData.scopes,
+            shopData: storeData.shopData,
+            expiresAt,
+        });
+
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        // Redirect user to linking page carrying the token; frontend will ask user to sign in/up and then call link endpoint
+        return res.redirect(`${frontendUrl}/link-store?token=${token}&shop=${encodeURIComponent(session.shop)}`);
+        }
+
+        // Register webhooks after successful connection
+        try {
+        await registerWebhooks(session);
+        } catch (webhookError) {
+        console.error('Webhook registration error:', webhookError);
+        // Don't fail the entire flow for webhook errors
+        }
+
+        // Redirect to frontend success page
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        res.redirect(`${frontendUrl}/stores?success=true&store=${encodeURIComponent(session.shop)}`);
+
+    } catch (error) {
+        console.error('OAuth callback error:', error);
+        
+        // Redirect to frontend error page
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+        res.redirect(`${frontendUrl}/stores?error=oauth_failed&message=${encodeURIComponent(error.message)}`);
     }
+    });
 
-    // Clear session data
-    delete req.session.shopifyAuth;
-
-    // Redirect to frontend success page
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    res.redirect(`${frontendUrl}/stores?success=true&store=${encodeURIComponent(session.shop)}`);
-
-  } catch (error) {
-    console.error('OAuth callback error:', error);
-    
-    // Clear session data
-    if (req.session.shopifyAuth) {
-      delete req.session.shopifyAuth;
-    }
-    
-    // Redirect to frontend error page
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    res.redirect(`${frontendUrl}/stores?error=oauth_failed&message=${encodeURIComponent(error.message)}`);
-  }
-});
+// Removed completeStoreConnection - functionality handled by handleCallback
 
 /**
  * Get connected stores
@@ -388,12 +554,9 @@ const getStoreAnalytics = asyncHandler(async (req, res) => {
   }
 
   try {
-    // Create session for API calls
-    const session = {
-      shop: store.shopDomain,
-      accessToken: store.accessToken,
-    };
-
+    // Get or create session for this store
+    const session = await getStoreSession(store);
+    
     const client = new shopify.clients.Rest({ session });
 
     // Fetch analytics data
@@ -440,6 +603,93 @@ const getStoreAnalytics = asyncHandler(async (req, res) => {
     throw new ApiError(500, 'Failed to fetch store analytics');
   }
 });
+
+/**
+ * Claim a store link token and bind the store to the current user
+ * POST /api/shopify/link-store
+ * Body: { token }
+ */
+const linkStoreToUser = asyncHandler(async (req, res) => {
+  const { token } = req.body;
+  const userId = req.user?._id;
+
+  if (!token) {
+    throw new ApiError(400, 'Token is required');
+  }
+  if (!userId) {
+    throw new ApiError(401, 'Authentication required');
+  }
+
+  // Atomically fetch + mark token as used
+  const link = await StoreLink.findOneAndUpdate(
+    { token, used: false, expiresAt: { $gt: new Date() } },
+    { $set: { used: true } },
+    { new: true }
+  );
+
+  if (!link) {
+    throw new ApiError(404, 'Invalid or expired token');
+  }
+
+  // Prevent cross-user hijack
+  const existingStore = await Store.findOne({ shopDomain: link.shopDomain });
+  if (existingStore && existingStore.userId.toString() !== userId.toString()) {
+    throw new ApiError(403, 'This store is already linked to another account');
+  }
+
+  // Upsert store for this user
+  let store;
+  if (existingStore) {
+    // Update existing store for this user
+    Object.assign(existingStore, {
+      accessToken: link.accessToken,
+      scopes: link.scopes,
+      isActive: true,
+      shopName: link.shopName || existingStore.shopName,
+      shopEmail: link.shopEmail || existingStore.shopEmail,
+      shopData: link.shopData || existingStore.shopData,
+      connectedAt: existingStore.connectedAt || new Date(),
+      lastSyncAt: new Date(),
+      syncStatus: 'completed',
+    });
+    store = await existingStore.save();
+  } else {
+    // Create new store
+    store = await Store.create({
+      userId,
+      shopDomain: link.shopDomain,
+      shopName: link.shopName || link.shopDomain,
+      shopEmail: link.shopEmail,
+      accessToken: link.accessToken,
+      scopes: link.scopes,
+      isActive: true,
+      connectedAt: new Date(),
+      shopData: link.shopData,
+      lastSyncAt: new Date(),
+      syncStatus: 'completed',
+    });
+
+    await User.findByIdAndUpdate(userId, { $inc: { connectedStores: 1 } });
+  }
+
+  // Optional cleanup: delete used link (not strictly required)
+  await StoreLink.deleteOne({ _id: link._id }).catch(() => {});
+
+  // Register webhooks after linking
+  try {
+    await registerWebhooks({
+      id: store.sessionId,
+      shop: store.shopDomain,
+      accessToken: store.accessToken,
+      isOnline: false,
+    });
+  } catch (err) {
+    console.error('Webhook registration failed after store linking:', err);
+  }
+
+  return res.json(new ApiResponse(200, { storeId: store._id }, 'Store linked successfully'));
+});
+
 
 // ============================================================================
 // WEBHOOK HANDLERS
@@ -638,6 +888,7 @@ export {
   // OAuth and Store Management
   initiateAuth,
   handleCallback,
+  exchangeSessionToken,
   getConnectedStores,
   disconnectStore,
   getStoreAnalytics,
@@ -650,4 +901,6 @@ export {
   handleProductDelete,
   handleOrderCreate,
   handleOrderUpdate
+  ,
+  linkStoreToUser
 };

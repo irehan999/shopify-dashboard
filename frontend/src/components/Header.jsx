@@ -1,16 +1,39 @@
 import { Fragment } from 'react'
 import { Menu, Transition } from '@headlessui/react'
+import { Link, useNavigate } from 'react-router-dom'
 import { 
   BellIcon, 
   UserCircleIcon,
   SunIcon,
   MoonIcon,
-  Bars3Icon
+  Bars3Icon,
+  UserIcon,
+  Cog6ToothIcon,
+  ArrowRightOnRectangleIcon
 } from '@heroicons/react/24/outline'
 import { useTheme } from '@/hooks/useTheme'
+import useAuthStore from '@/stores/authStore'
+import { useLogout } from '@/features/auth/hooks/useAuth'
 
 export default function Header() {
   const { theme, toggleTheme } = useTheme()
+  const { user } = useAuthStore()
+  const navigate = useNavigate()
+  const logoutMutation = useLogout()
+
+  const handleLogout = async () => {
+    try {
+      await logoutMutation.mutateAsync()
+      navigate('/auth/login')
+    } catch (error) {
+      // Error is handled in the hook, but we still navigate
+      navigate('/auth/login')
+    }
+  }
+
+  const handleProfileClick = () => {
+    navigate('/settings')
+  }
 
   return (
     <header className="bg-white dark:bg-gray-900 shadow-sm border-b border-gray-200 dark:border-gray-800">
@@ -68,8 +91,19 @@ export default function Header() {
             {/* Profile dropdown */}
             <Menu as="div" className="relative">
               <div>
-                <Menu.Button className="flex text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                  <UserCircleIcon className="h-8 w-8 text-gray-400" />
+                <Menu.Button className="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 space-x-2">
+                  {user?.profileImage?.url ? (
+                    <img 
+                      className="h-8 w-8 rounded-full object-cover" 
+                      src={user.profileImage.url} 
+                      alt={user.fullName || user.username}
+                    />
+                  ) : (
+                    <UserCircleIcon className="h-8 w-8 text-gray-400" />
+                  )}
+                  <span className="hidden md:block text-sm font-medium text-gray-700 dark:text-gray-200">
+                    {user?.fullName || user?.username}
+                  </span>
                 </Menu.Button>
               </div>
               <Transition
@@ -82,46 +116,61 @@ export default function Header() {
                 leaveTo="transform opacity-0 scale-95"
               >
                 <Menu.Items className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
+                  <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-600">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                      {user?.fullName || user?.username}
+                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {user?.email}
+                    </p>
+                  </div>
+                  
                   <Menu.Item>
                     {({ active }) => (
-                      <a
-                        href="#"
-                        className={`block px-4 py-2 text-sm ${
+                      <button
+                        onClick={handleProfileClick}
+                        className={`flex items-center w-full px-4 py-2 text-sm ${
                           active 
                             ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white' 
                             : 'text-gray-700 dark:text-gray-200'
                         }`}
                       >
+                        <UserIcon className="mr-3 h-4 w-4" />
                         Your Profile
-                      </a>
+                      </button>
                     )}
                   </Menu.Item>
+                  
                   <Menu.Item>
                     {({ active }) => (
-                      <a
-                        href="#"
-                        className={`block px-4 py-2 text-sm ${
+                      <Link
+                        to="/settings"
+                        className={`flex items-center px-4 py-2 text-sm ${
                           active 
                             ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white' 
                             : 'text-gray-700 dark:text-gray-200'
                         }`}
                       >
+                        <Cog6ToothIcon className="mr-3 h-4 w-4" />
                         Settings
-                      </a>
+                      </Link>
                     )}
                   </Menu.Item>
+                  
                   <Menu.Item>
                     {({ active }) => (
-                      <a
-                        href="#"
-                        className={`block px-4 py-2 text-sm ${
+                      <button
+                        onClick={handleLogout}
+                        disabled={logoutMutation.isPending}
+                        className={`flex items-center w-full px-4 py-2 text-sm ${
                           active 
                             ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white' 
                             : 'text-gray-700 dark:text-gray-200'
-                        }`}
+                        } ${logoutMutation.isPending ? 'opacity-50 cursor-not-allowed' : ''}`}
                       >
-                        Sign out
-                      </a>
+                        <ArrowRightOnRectangleIcon className="mr-3 h-4 w-4" />
+                        {logoutMutation.isPending ? 'Signing out...' : 'Sign out'}
+                      </button>
                     )}
                   </Menu.Item>
                 </Menu.Items>

@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { createBrowserRouter, RouterProvider } from 'react-router-dom'
+import { createBrowserRouter, createRoutesFromElements, Route, RouterProvider } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
 import { queryClient } from '@/lib'
@@ -16,31 +16,31 @@ import Stores from '@/pages/Stores'
 import Products from '@/pages/Products'
 import Settings from '@/pages/Settings'
 
-// Create router
-const router = createBrowserRouter([
-  {
-    path: '/',
-    element: <Layout />,
-    children: [
-      {
-        index: true,
-        element: <Dashboard />,
-      },
-      {
-        path: 'stores',
-        element: <Stores />,
-      },
-      {
-        path: 'products',
-        element: <Products />,
-      },
-      {
-        path: 'settings',
-        element: <Settings />,
-      },
-    ],
-  },
-])
+// Auth components
+import Login from '@/pages/auth/Login'
+import Signup from '@/pages/auth/Signup'
+import { AuthGuard, PublicRoute } from '@/features/auth/components/AuthGuard'
+import LinkStore from '@/pages/LinkStore'
+
+// Create router using createRoutesFromElements
+const router = createBrowserRouter(
+  createRoutesFromElements(
+    <>
+      {/* Auth routes (public) */}
+      <Route path="/auth/login" element={<PublicRoute><Login /></PublicRoute>} />
+      <Route path="/auth/signup" element={<PublicRoute><Signup /></PublicRoute>} />
+  <Route path="/link-store" element={<PublicRoute><LinkStore /></PublicRoute>} />
+      
+      {/* Protected routes */}
+      <Route path="/" element={<AuthGuard><Layout /></AuthGuard>}>
+        <Route index element={<Dashboard />} />
+        <Route path="stores" element={<Stores />} />
+        <Route path="products" element={<Products />} />
+        <Route path="settings" element={<Settings />} />
+      </Route>
+    </>
+  )
+)
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

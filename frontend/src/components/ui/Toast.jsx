@@ -105,4 +105,4 @@ const Toast = ({
   )
 }
 
-export default Toast
+export { Toast }

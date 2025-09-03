@@ -26,14 +26,55 @@ api.interceptors.response.use(
   (response) => {
     return response
   },
-  (error) => {
-    // Handle common errors
-    if (error.response?.status === 401) {
-      // Handle unauthorized access - clear auth and redirect
-      console.log('Unauthorized access, redirecting to login');
-      // You can dispatch logout action here
+  async (error) => {
+    const originalRequest = error.config
+    
+    // Handle 401 errors (unauthorized) - but be more selective
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      // Don't retry auth endpoints to prevent infinite loops
+      if (originalRequest.url?.includes('/api/auth/')) {
+        return Promise.reject(error)
+      }
+      
+      originalRequest._retry = true
+      
+      console.log('Token expired, attempting refresh...')
+      
+      try {
+        // Try to refresh the token using a separate axios instance to avoid interceptor loops
+        const refreshResponse = await axios.post('/api/auth/refresh-token', {}, {
+          baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
+          withCredentials: true,
+          timeout: 5000, // Short timeout for refresh
+        })
+        
+        if (refreshResponse.status === 200) {
+          console.log('Token refreshed successfully, retrying request')
+          // Token refreshed successfully, retry the original request
+          return api(originalRequest)
+        }
+      } catch (refreshError) {
+        // Refresh failed, log out the user
+        console.log('Token refresh failed, logging out user:', refreshError.response?.data?.message || refreshError.message)
+        
+        // Clear auth state - import dynamically to avoid circular dependency
+        try {
+          const { default: useAuthStore } = await import('@/stores/authStore')
+          useAuthStore.getState().logout()
+          
+          // Only redirect if we're not already on login page
+          if (typeof window !== 'undefined' && !window.location.pathname.includes('/auth/')) {
+            window.location.href = '/auth/login'
+          }
+        } catch (importError) {
+          console.error('Failed to import auth store:', importError)
+        }
+        
+        return Promise.reject(refreshError)
+      }
     }
     
+    // Handle other errors
     if (error.response?.status === 500) {
       console.error('Server error:', error.response.data)
     }

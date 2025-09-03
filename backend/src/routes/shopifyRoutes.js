@@ -3,10 +3,12 @@ import {
   // OAuth and Store Management
   initiateAuth,
   handleCallback,
+  exchangeSessionToken,
   getConnectedStores,
   disconnectStore,
   getStoreAnalytics,
   validateSession,
+  linkStoreToUser,
   
   // Webhook Handlers
   handleAppUninstalled,
@@ -16,7 +18,7 @@ import {
   handleOrderCreate,
   handleOrderUpdate
 } from '../controllers/shopifyController.js';
-import { authenticateUser as verifyJWT } from '../middleware/auth.js';
+import { authenticateUser as verifyJWT, optionalAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -37,14 +39,18 @@ const captureRawBody = (req, res, next) => {
 
 router.use(captureRawBody);
 
-// OAuth flow routes
-router.post('/auth', verifyJWT, initiateAuth);
-router.get('/callback', handleCallback);
+// OAuth flow routes - auth initiation should not require authentication!
+router.get('/auth', verifyJWT, initiateAuth); // Optional auth to get user context if available
+router.get('/callback', handleCallback); // No JWT required for callback
+
+// Session token exchange for embedded apps
+router.post('/token-exchange', exchangeSessionToken);
 
 // Store management routes (all require authentication)
 router.get('/stores', verifyJWT, getConnectedStores);
 router.delete('/stores/:storeId', verifyJWT, disconnectStore);
 router.get('/stores/:storeId/analytics', verifyJWT, getStoreAnalytics);
+router.post('/link-store', verifyJWT, linkStoreToUser);
 
 // Session validation endpoint
 router.get('/session/validate', validateSession, (req, res) => {

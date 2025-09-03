@@ -1,19 +1,21 @@
 import dotenv from 'dotenv';
-import http from 'http';
-import { Server } from 'socket.io';
-import jwt from 'jsonwebtoken';
-import cookie from 'cookie';
-import { app } from './app.js';
-import { User } from './src/models/User.js';
-import { initializeNotificationSockets } from './src/services/notification.service.js';
-import { connectDB } from './src/config/database.js';
-
 dotenv.config(
     {
       path: './.env'
     }
 );
-console.log("Loaded vars:", process.env.PORT, process.env.ACCESS_TOKEN_SECRET);
+
+import http from 'http';
+import { Server } from 'socket.io';
+import jwt from 'jsonwebtoken';
+import cookie from 'cookie';
+
+import { app } from './app.js';
+import { User } from './src/models/User.js';
+import { initializeNotificationSockets } from './src/services/notification.service.js';
+import { connectDB } from './src/config/database.js';
+
+
 
 // Create HTTP server
 const server = http.createServer(app);
@@ -27,7 +29,7 @@ const io = new Server(server, {
     }
 });
 
-// Socket authentication middleware
+// Socket authentication middleware with token refresh capability
 const authenticateSocket = async (socket, next) => {
     try {
         const cookies = socket.handshake.headers.cookie;
@@ -36,24 +38,51 @@ const authenticateSocket = async (socket, next) => {
         }
 
         const parsedCookies = cookie.parse(cookies);
-        const token = parsedCookies['accessToken'];
+        let accessToken = parsedCookies['accessToken'];
+        const refreshToken = parsedCookies['refreshToken'];
         
-        if (!token) {
-            return next(new Error('No auth token found in cookies'));
+        if (!accessToken && !refreshToken) {
+            return next(new Error('No auth tokens found in cookies'));
         }
 
-        const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-        if (!decoded) {
-            return next(new Error('Invalid token'));
+        let decoded;
+        let user;
+
+        // Try to verify access token first
+        try {
+            decoded = jwt.verify(accessToken, process.env.ACCESS_TOKEN_SECRET);
+            user = await User.findById(decoded._id);
+            
+            if (user) {
+                socket.user = user;
+                return next();
+            }
+        } catch (tokenError) {
+            console.log('Access token invalid or expired, trying refresh token');
+            
+            // If access token fails, try refresh token
+            if (refreshToken) {
+                try {
+                    const refreshDecoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+                    const refreshUser = await User.findById(refreshDecoded._id);
+                    
+                    if (refreshUser && refreshUser.refreshToken === refreshToken) {
+                        // Refresh token is valid, but we can't set new cookies in socket middleware
+                        // Instead, we'll allow the connection and let the client handle refresh
+                        socket.user = refreshUser;
+                        socket.emit('token_refresh_needed'); // Tell client to refresh token
+                        return next();
+                    }
+                } catch (refreshError) {
+                    console.log('Refresh token also invalid');
+                }
+            }
+            
+            // Both tokens failed
+            return next(new Error('Authentication failed'));
         }
 
-        const user = await User.findById(decoded._id);
-        if (!user) {
-            return next(new Error('User not found'));
-        }
-
-        socket.user = user;
-        next();
+        return next(new Error('User not found'));
     } catch (error) {
         console.error('Socket authentication error:', error);
         return next(new Error('Authentication failed'));

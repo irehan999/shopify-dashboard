@@ -7,22 +7,25 @@ const StoreConnection = () => {
   const [isConnecting, setIsConnecting] = useState(false);
 
   const { data: stores = [], isLoading, error } = useConnectedStores();
-  const initiateAuth = useInitiateShopifyAuth();
+  const initiateAuthMutation = useInitiateShopifyAuth();
   const disconnectStore = useDisconnectStore();
 
-  const handleConnect = async (e) => {
-    e.preventDefault();
-    if (!shopDomain.trim()) return;
+const handleConnect = async (e) => {
+  e.preventDefault();
+  if (!shopDomain.trim()) return;
 
-    setIsConnecting(true);
-    try {
-      await initiateAuth.mutateAsync(shopDomain.trim());
-    } catch (error) {
-      console.error('Connection failed:', error);
-    } finally {
-      setIsConnecting(false);
-    }
-  };
+  setIsConnecting(true);
+  try {
+    const cleaned = shopDomain.trim().toLowerCase();
+    const fullDomain = cleaned.includes('.myshopify.com') ? cleaned : `${cleaned}.myshopify.com`;
+    await initiateAuthMutation.mutateAsync(fullDomain);
+  } catch (error) {
+    console.error('Failed to initiate OAuth:', error);
+    setIsConnecting(false);
+  }
+  // After mutateAsync completes, browser will redirect to OAuth
+};
+
 
   const handleDisconnect = async (storeId, shopName) => {
     if (window.confirm(`Are you sure you want to disconnect ${shopName}?`)) {
@@ -42,10 +45,10 @@ const StoreConnection = () => {
     return (
       <div className="p-6">
         <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
+          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-6"></div>
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-20 bg-gray-200 rounded"></div>
+              <div key={i} className="h-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
             ))}
           </div>
         </div>
@@ -56,24 +59,24 @@ const StoreConnection = () => {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
           Connected Stores
         </h1>
-        <p className="text-gray-600">
+        <p className="text-gray-600 dark:text-gray-400">
           Manage your Shopify store connections and view analytics
         </p>
       </div>
 
       {/* Connect new store form */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 p-6 mb-8">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
           <Plus className="mr-2 h-5 w-5" />
           Connect New Store
         </h2>
         
         <form onSubmit={handleConnect} className="flex gap-4">
           <div className="flex-1">
-            <label htmlFor="shop-domain" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="shop-domain" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Shop Domain
             </label>
             <div className="relative">
@@ -83,10 +86,10 @@ const StoreConnection = () => {
                 placeholder="your-store"
                 value={shopDomain}
                 onChange={(e) => setShopDomain(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 disabled={isConnecting}
               />
-              <span className="absolute right-3 top-2 text-gray-500 text-sm">
+              <span className="absolute right-3 top-2 text-gray-500 dark:text-gray-400 text-sm">
                 .myshopify.com
               </span>
             </div>
@@ -95,32 +98,32 @@ const StoreConnection = () => {
             <button
               type="submit"
               disabled={isConnecting || !shopDomain.trim()}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
             >
               {isConnecting ? 'Connecting...' : 'Connect Store'}
             </button>
           </div>
         </form>
         
-        <p className="text-sm text-gray-500 mt-2">
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
           Enter your Shopify store domain without .myshopify.com
         </p>
       </div>
 
       {/* Connected stores list */}
       {error ? (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-          <p className="text-red-800">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-4 mb-6">
+          <p className="text-red-800 dark:text-red-200">
             Failed to load stores: {error.message}
           </p>
         </div>
       ) : stores.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <Store className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
+        <div className="text-center py-12 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg">
+          <Store className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500 mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
             No stores connected
           </h3>
-          <p className="text-gray-600">
+          <p className="text-gray-600 dark:text-gray-400">
             Connect your first Shopify store to get started
           </p>
         </div>
@@ -167,20 +170,20 @@ const StoreCard = ({ store, onDisconnect, onViewAnalytics }) => {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-600 p-6">
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center mb-2">
-            <Store className="h-5 w-5 text-gray-400 mr-2" />
-            <h3 className="text-lg font-semibold text-gray-900">
+            <Store className="h-5 w-5 text-gray-400 dark:text-gray-500 mr-2" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               {store.shopName}
             </h3>
-            <span className="ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+            <span className="ml-2 px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 text-xs rounded-full">
               Connected
             </span>
           </div>
           
-          <p className="text-sm text-gray-600 mb-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
             {formatShopDomain(store.shopDomain)} • 
             Connected on {formatDate(store.connectedAt)}
           </p>
@@ -188,23 +191,23 @@ const StoreCard = ({ store, onDisconnect, onViewAnalytics }) => {
           {/* Quick stats */}
           {store.analytics && (
             <div className="grid grid-cols-3 gap-4 mb-4">
-              <div className="text-center p-3 bg-gray-50 rounded-lg">
-                <p className="text-2xl font-bold text-gray-900">
+              <div className="text-center p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg">
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                   {store.analytics.totalOrders || 0}
                 </p>
-                <p className="text-sm text-gray-600">Orders</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Orders</p>
               </div>
-              <div className="text-center p-3 bg-gray-50 rounded-lg">
-                <p className="text-2xl font-bold text-gray-900">
+              <div className="text-center p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg">
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                   {formatCurrency(store.analytics.totalRevenue || 0, store.shopData?.currency)}
                 </p>
-                <p className="text-sm text-gray-600">Revenue</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Revenue</p>
               </div>
-              <div className="text-center p-3 bg-gray-50 rounded-lg">
-                <p className="text-2xl font-bold text-gray-900">
+              <div className="text-center p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg">
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                   {store.analytics.totalProducts || 0}
                 </p>
-                <p className="text-sm text-gray-600">Products</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Products</p>
               </div>
             </div>
           )}
@@ -213,7 +216,7 @@ const StoreCard = ({ store, onDisconnect, onViewAnalytics }) => {
         <div className="flex space-x-2 ml-4">
           <button
             onClick={onViewAnalytics}
-            className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
+            className="p-2 text-gray-400 hover:text-blue-600 dark:text-gray-500 dark:hover:text-blue-400 transition-colors"
             title="View Analytics"
           >
             <BarChart3 className="h-5 w-5" />
@@ -223,7 +226,7 @@ const StoreCard = ({ store, onDisconnect, onViewAnalytics }) => {
             href={`https://${store.shopDomain}/admin`}
             target="_blank"
             rel="noopener noreferrer"
-            className="p-2 text-gray-400 hover:text-green-600 transition-colors"
+            className="p-2 text-gray-400 hover:text-green-600 dark:text-gray-500 dark:hover:text-green-400 transition-colors"
             title="Open Shopify Admin"
           >
             <ExternalLink className="h-5 w-5" />
@@ -231,7 +234,7 @@ const StoreCard = ({ store, onDisconnect, onViewAnalytics }) => {
           
           <button
             onClick={onDisconnect}
-            className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+            className="p-2 text-gray-400 hover:text-red-600 dark:text-gray-500 dark:hover:text-red-400 transition-colors"
             title="Disconnect Store"
           >
             <Trash2 className="h-5 w-5" />
@@ -281,8 +284,8 @@ const OAuthCallbackHandler = () => {
   return (
     <div className={`fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 ${
       callbackStatus.type === 'success' 
-        ? 'bg-green-50 border border-green-200 text-green-800'
-        : 'bg-red-50 border border-red-200 text-red-800'
+        ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-200'
+        : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-200'
     }`}>
       <div className="flex items-center">
         <span className="mr-2">
@@ -291,7 +294,7 @@ const OAuthCallbackHandler = () => {
         {callbackStatus.message}
         <button
           onClick={() => setCallbackStatus(null)}
-          className="ml-4 text-gray-500 hover:text-gray-700"
+          className="ml-4 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
         >
           ×
         </button>

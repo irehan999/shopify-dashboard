@@ -128,7 +128,24 @@ export const SocketProvider = ({ children }) => {
       useNotificationStore.getState().setConnected(false);
     });
 
-    socket.on("connect_error", (error) => {
+    // Minimal auth error handling without loops
+    socket.on("auth_error", () => {
+      console.error("SocketProvider: auth_error received");
+      useAuthStore.getState().logout();
+    });
+
+    socket.on("session_expired", () => {
+      console.warn("SocketProvider: session_expired received");
+      useAuthStore.getState().logout();
+    });
+
+    // Handle token refresh needed signal from backend
+    socket.on("token_refresh_needed", () => {
+      console.log("SocketProvider: token_refresh_needed received");
+      // Let HTTP layer handle refresh; keep socket simple
+    });
+
+  socket.on("connect_error", (error) => {
       console.error("SocketProvider: Socket connection error:", error.message);
       console.error("Error details:", {
         type: error.type,
@@ -137,19 +154,6 @@ export const SocketProvider = ({ children }) => {
       });
       // Update connection status
       useNotificationStore.getState().setConnected(false);
-    });
-
-    // Handle authentication errors from socket
-    socket.on("auth_error", (error) => {
-      console.error("SocketProvider: Socket authentication error:", error);
-      // Force logout on auth error
-      useAuthStore.getState().logout();
-    });
-
-    socket.on("session_expired", () => {
-      console.warn("SocketProvider: Session expired, logging out");
-      // Force logout on session expiry
-      useAuthStore.getState().logout();
     });
 
     // Cleanup function - remove all event listeners
@@ -167,6 +171,7 @@ export const SocketProvider = ({ children }) => {
       socket.off("connect_error");
       socket.off("auth_error");
       socket.off("session_expired");
+      socket.off("token_refresh_needed");
     };
   }, [isAuthenticated, user, handleSocketEvent, queryClient]);
 

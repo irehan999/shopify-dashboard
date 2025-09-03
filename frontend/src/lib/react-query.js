@@ -8,14 +8,16 @@ export const queryClient = new QueryClient({
       cacheTime: 1000 * 60 * 10, // 10 minutes
       retry: (failureCount, error) => {
         // Don't retry on 4xx errors except 408, 429
-        if (error?.status >= 400 && error?.status < 500 && ![408, 429].includes(error?.status)) {
+        const status = error?.status || error?.response?.status;
+        if (status >= 400 && status < 500 && ![408, 429].includes(status)) {
           return false
         }
         // Retry up to 3 times for other errors
         return failureCount < 3
       },
       refetchOnWindowFocus: false,
-      refetchOnMount: true,
+      // Avoid remount refetches that can glitch on theme toggles that re-render roots
+      refetchOnMount: false,
       refetchOnReconnect: true,
     },
     mutations: {

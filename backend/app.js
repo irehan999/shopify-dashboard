@@ -55,69 +55,81 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 app.use(helmet());
 
-// CORS configuration
-app.use(cors({
+
+
+app.use(
+  cors({
     origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) return callback(null, true);
-        
-        // Check against environment variable
-        const allowedOrigins = process.env.FRONTEND_URL 
-            ? process.env.FRONTEND_URL.split(',') 
-            : ['http://localhost:5173'];
-        
-        // In development, allow all localhost ports
-        if (process.env.NODE_ENV === 'development') {
-            const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
-            if (isLocalhost) return callback(null, true);
+      // Always allow requests with no origin (mobile apps, curl, etc.)
+      if (!origin) return callback(null, true);
+
+      const allowedOrigins = [
+        "http://localhost:5173",
+        "http://localhost:3000", 
+        "http://127.0.0.1:5173",
+        "https://07fbd8d74223.ngrok-free.app", // Allow ngrok frontend
+        process.env.FRONTEND_URL
+      ].filter(Boolean);
+
+      // In development, be more permissive
+      if (process.env.NODE_ENV === "development") {
+        const isLocalhost = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
+        const isNgrok = /\.ngrok-free\.app$/i.test(origin);
+
+        if (isLocalhost || isNgrok || allowedOrigins.includes(origin)) {
+          return callback(null, true);
         }
-        
-        // Check against allowed origins
+      } else {
+        // Production: only allow specific origins
         if (allowedOrigins.includes(origin)) {
-            return callback(null, true);
+          return callback(null, true);
         }
-        
-        // Reject all other origins
-        callback(new Error(`Origin ${origin} not allowed by CORS`));
+      }
+
+      console.log(`CORS blocked origin: ${origin}`);
+      callback(new Error(`Origin ${origin} not allowed by CORS`));
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    exposedHeaders: ['Set-Cookie'],
-    maxAge: 86400 // Cache preflight requests for 24 hours
-}));
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "X-Shopify-*"],
+    exposedHeaders: ["Set-Cookie"],
+    preflightContinue: false,
+    optionsSuccessStatus: 200,
+    maxAge: 86400,
+  })
+);
 
-// Global rate limiter (simple in-memory)
-const globalLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 1000, // Limit each IP to 1000 requests per windowMs
-    message: {
-        success: false,
-        message: 'Too many requests from this IP, please try again later.'
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
-});
+// Global rate limiter (simple in-memory) - TEMPORARILY DISABLED FOR TESTING
+// const globalLimiter = rateLimit({
+//     windowMs: 15 * 60 * 1000, // 15 minutes
+//     max: 1000, // Limit each IP to 1000 requests per windowMs
+//     message: {
+//         success: false,
+//         message: 'Too many requests from this IP, please try again later.'
+//     },
+//     standardHeaders: true,
+//     legacyHeaders: false,
+// });
 
-app.use((req, res, next) => {
-    // Skip global rate limit for auth routes (they have their own)
-    if (req.path.startsWith("/api/auth")) {
-        return next();
-    }
-    globalLimiter(req, res, next);
-});
+// app.use((req, res, next) => {
+//     // Skip global rate limit for auth routes (they have their own)
+//     if (req.path.startsWith("/api/auth")) {
+//         return next();
+//     }
+//     globalLimiter(req, res, next);
+// });
 
-// Auth-specific rate limiter (simple in-memory)
-const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 20, // Limit each IP to 20 auth requests per windowMs
-    message: {
-        success: false, 
-        message: "Too many authentication attempts. Please try again later."
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
-});
+// Auth-specific rate limiter (simple in-memory) - TEMPORARILY DISABLED FOR TESTING
+// const authLimiter = rateLimit({
+//     windowMs: 15 * 60 * 1000, // 15 minutes
+//     max: 20, // Limit each IP to 20 auth requests per windowMs
+//     message: {
+//         success: false, 
+//         message: "Too many authentication attempts. Please try again later."
+//     },
+//     standardHeaders: true,
+//     legacyHeaders: false,
+// });
 
 // Health check route
 app.get('/health', (req, res) => {
@@ -129,7 +141,7 @@ app.get('/health', (req, res) => {
 });
 
 // API Routes
-app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/auth', authRoutes); // authLimiter temporarily disabled
 app.use('/api/user', userRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/shopify', shopifyRoutes);
@@ -159,12 +171,12 @@ app.use((err, req, res, next) => {
     });
 });
 
-// 404 handler
-app.use('*', (req, res) => {
-    res.status(404).json({ 
-        success: false,
-        message: `Route ${req.originalUrl} not found` 
-    });
-});
+// // 404 handler
+// app.use('*', (req, res) => {
+//     res.status(404).json({ 
+//         success: false,
+//         message: `Route ${req.originalUrl} not found` 
+//     });
+// });
 
 export { app };

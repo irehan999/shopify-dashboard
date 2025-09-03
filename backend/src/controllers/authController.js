@@ -4,12 +4,20 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 import asyncHandler from '../utils/AsyncHanlde.js';
 import jwt from 'jsonwebtoken';
 
-// Cookie options
-const cookieOptions = {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+// Cookie options helper (supports cross-site cookies when using ngrok/https)
+const getCookieOptions = () => {
+    const appUrl = process.env.SHOPIFY_APP_URL || '';
+    const usingHttps = appUrl.startsWith('https://');
+    const isNgrok = appUrl.includes('ngrok');
+    const crossSite = usingHttps || isNgrok;
+
+    return {
+        httpOnly: true,
+        // For cross-site cookies (frontend on localhost, backend on ngrok), Chrome requires Secure+SameSite=None
+        secure: crossSite,
+        sameSite: crossSite ? 'none' : 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    };
 };
 
 // Generate access and refresh tokens
@@ -33,13 +41,17 @@ export const registerUser = asyncHandler(async (req, res) => {
     const { fullName, username, email, password } = req.body;
 
     // Validation
-    if ([fullName, username, email, password].some(field => field?.trim() === '')) {
+    if ([fullName, username, email, password].some(field => !field || field?.trim() === '')) {
         throw new ApiError(400, 'All fields are required');
     }
 
+    // Clean and validate inputs
+    const cleanUsername = username.trim().toLowerCase();
+    const cleanEmail = email.trim().toLowerCase();
+
     // Check if user already exists
     const existedUser = await User.findOne({
-        $or: [{ username }, { email }]
+        $or: [{ username: cleanUsername }, { email: cleanEmail }]
     });
 
     if (existedUser) {
@@ -48,9 +60,9 @@ export const registerUser = asyncHandler(async (req, res) => {
 
     // Create user (password will be hashed by pre-save hook)
     const user = await User.create({
-        fullName,
-        username: username.toLowerCase(),
-        email: email.toLowerCase(),
+        fullName: fullName.trim(),
+        username: cleanUsername,
+        email: cleanEmail,
         password,
         isVerified: true // Auto-verify for simplicity
     });
@@ -69,8 +81,8 @@ export const registerUser = asyncHandler(async (req, res) => {
 
     return res
         .status(201)
-        .cookie('accessToken', accessToken, cookieOptions)
-        .cookie('refreshToken', refreshToken, cookieOptions)
+    .cookie('accessToken', accessToken, getCookieOptions())
+    .cookie('refreshToken', refreshToken, getCookieOptions())
         .json(
             new ApiResponse(
                 201,
@@ -137,8 +149,8 @@ export const loginUser = asyncHandler(async (req, res) => {
 
     return res
         .status(200)
-        .cookie('accessToken', accessToken, cookieOptions)
-        .cookie('refreshToken', refreshToken, cookieOptions)
+    .cookie('accessToken', accessToken, getCookieOptions())
+    .cookie('refreshToken', refreshToken, getCookieOptions())
         .json(
             new ApiResponse(
                 200,
@@ -183,15 +195,15 @@ export const logoutUser = asyncHandler(async (req, res) => {
 
         return res
             .status(200)
-            .clearCookie('accessToken', cookieOptions)
-            .clearCookie('refreshToken', cookieOptions)
+            .clearCookie('accessToken', getCookieOptions())
+            .clearCookie('refreshToken', getCookieOptions())
             .json(new ApiResponse(200, {}, 'User logged out successfully'));
     } catch (error) {
         // Even if something goes wrong, clear the cookies
         return res
             .status(200)
-            .clearCookie('accessToken', cookieOptions)
-            .clearCookie('refreshToken', cookieOptions)
+            .clearCookie('accessToken', getCookieOptions())
+            .clearCookie('refreshToken', getCookieOptions())
             .json(new ApiResponse(200, {}, 'User logged out'));
     }
 });
@@ -225,8 +237,8 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
 
         return res
             .status(200)
-            .cookie('accessToken', accessToken, cookieOptions)
-            .cookie('refreshToken', refreshToken, cookieOptions)
+            .cookie('accessToken', accessToken, getCookieOptions())
+            .cookie('refreshToken', refreshToken, getCookieOptions())
             .json(
                 new ApiResponse(
                     200,

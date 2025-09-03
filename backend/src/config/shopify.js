@@ -38,19 +38,17 @@ export const shopify = shopifyApi({
   ],
   
   // App URL configuration
-  hostName: process.env.SHOPIFY_APP_URL?.replace(/https?:\/\//, '') || 'localhost',
+  hostName: process.env.SHOPIFY_APP_URL?.replace(/https?:\/\//, ''),
   hostScheme: 'https',
   
   // API version
   apiVersion: LATEST_API_VERSION,
   
   // App type
-  isEmbeddedApp: true,
+  isEmbeddedApp: false,
   
   // Session storage
   sessionStorage: sessionStorage,
-  
-  // ✅ Webhooks removed to avoid duplication - registered programmatically instead
 });
 
 // Helper to get session from request
@@ -70,6 +68,23 @@ export const getSessionFromRequest = async (req, res) => {
   } catch (error) {
     console.error('Error getting session from request:', error);
     return null;
+  }
+};
+
+// Helper to create and store session
+export const createSession = async (shop, accessToken, scopes) => {
+  try {
+    const session = shopify.session.customAppSession(shop);
+    session.accessToken = accessToken;
+    session.scope = Array.isArray(scopes) ? scopes.join(',') : scopes;
+    
+    // Store session in MongoDB
+    await shopify.config.sessionStorage.storeSession(session);
+    
+    return session;
+  } catch (error) {
+    console.error('Error creating session:', error);
+    throw error;
   }
 };
 

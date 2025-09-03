@@ -429,8 +429,11 @@ if (typeof window !== 'undefined') {
     useAuthStore.subscribe((state, prevState) => {
       // User just logged in
       if (state.isAuthenticated && !prevState.isAuthenticated) {
-        console.log('User logged in, syncing notifications...');
-        useNotificationStore.getState().syncWithBackend();
+        console.log('User logged in, waiting before syncing notifications...');
+        // Delay sync to allow cookies to be set properly
+        setTimeout(() => {
+          useNotificationStore.getState().syncWithBackend();
+        }, 2000); // Wait 2 seconds
       }
       
       // User just logged out

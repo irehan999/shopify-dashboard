@@ -10,13 +10,13 @@ import * as shopifyController from '../controllers/shopifyGraphQLControllerNew.j
 
 // Import correct middleware
 import { authenticateUser } from '../middleware/auth.js';
-import { validateSession } from '../controllers/shopifyController.js';
+import { validateShopifySession } from '../middleware/shopifySession.js';
 
 const router = express.Router();
 
 // Apply authentication and Shopify session validation to all routes
 router.use(authenticateUser);
-router.use(validateSession);
+router.use(validateShopifySession);
 
 /**
  * Product Creation Routes
