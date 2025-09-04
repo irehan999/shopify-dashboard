@@ -7,6 +7,7 @@ import {
   getConnectedStores,
   disconnectStore,
   getStoreAnalytics,
+  getStoreSummary,
   validateSession,
   linkStoreToUser,
   
@@ -50,6 +51,7 @@ router.post('/token-exchange', exchangeSessionToken);
 router.get('/stores', verifyJWT, getConnectedStores);
 router.delete('/stores/:storeId', verifyJWT, disconnectStore);
 router.get('/stores/:storeId/analytics', verifyJWT, getStoreAnalytics);
+router.get('/stores/:storeId/summary', verifyJWT, getStoreSummary);
 router.post('/link-store', verifyJWT, linkStoreToUser);
 
 // Session validation endpoint

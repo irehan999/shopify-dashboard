@@ -312,6 +312,122 @@ productSchema.methods.toShopifyProductInput = function() {
   return input
 }
 
+// Convert to ProductSetInput for productSet mutation (upsert)
+productSchema.methods.toShopifyProductSetInput = function(locationId = null, collectionsToJoin = []) {
+  const input = {
+    title: this.title,
+    handle: this.handle || this.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  }
+  
+  // Add optional fields only if they exist
+  if (this.descriptionHtml) input.descriptionHtml = this.descriptionHtml
+  if (this.vendor) input.vendor = this.vendor
+  if (this.productType) input.productType = this.productType
+  if (this.tags?.length) input.tags = this.tags
+  if (this.status) input.status = this.status
+  if (typeof this.published === 'boolean') input.published = this.published
+  if (this.publishDate) input.publishDate = this.publishDate.toISOString()
+  
+  // For productSet, use collections field instead of collectionsToJoin
+  // Priority: 1. Dynamic collections from frontend, 2. Product's stored collections
+  if (collectionsToJoin.length > 0) {
+    input.collections = collectionsToJoin;
+  } else if (this.collectionsToJoin?.length) {
+    input.collections = this.collectionsToJoin;
+  }
+  
+  if (this.giftCard) input.giftCard = this.giftCard
+  if (this.giftCardTemplateSuffix) input.giftCardTemplateSuffix = this.giftCardTemplateSuffix
+  
+  // Add SEO if exists
+  if (this.seo?.title || this.seo?.description) {
+    input.seo = {}
+    if (this.seo.title) input.seo.title = this.seo.title
+    if (this.seo.description) input.seo.description = this.seo.description
+  }
+  
+  // Add product options for new product model
+  if (this.options?.length) {
+    input.productOptions = this.options.map(option => ({
+      name: option.name,
+      position: option.position,
+      values: option.optionValues?.map(value => ({ 
+        name: value.name 
+      })) || []
+    }))
+  }
+  
+  // Add variants for productSet
+  if (this.variants?.length) {
+    input.variants = this.variants.map(variant => {
+      const variantInput = {
+        price: variant.price.toString() // Shopify expects string
+      }
+      
+      // Add optional variant fields
+      if (variant.compareAtPrice) variantInput.compareAtPrice = variant.compareAtPrice.toString()
+      if (variant.sku) variantInput.sku = variant.sku
+      if (variant.barcode) variantInput.barcode = variant.barcode
+      if (variant.taxCode) variantInput.taxCode = variant.taxCode
+      if (typeof variant.taxable === 'boolean') variantInput.taxable = variant.taxable
+      if (typeof variant.requiresShipping === 'boolean') variantInput.requiresShipping = variant.requiresShipping
+      
+      // Inventory settings - for productSet use inventoryQuantities with proper location
+      if (variant.inventoryPolicy) variantInput.inventoryPolicy = variant.inventoryPolicy.toUpperCase()
+      if (typeof variant.inventoryQuantity === 'number' && locationId) {
+        variantInput.inventoryQuantities = [{
+          availableQuantity: variant.inventoryQuantity,
+          locationId: locationId
+        }]
+      }
+      
+      // Weight
+      if (variant.weight) {
+        variantInput.inventoryItem = {
+          measurement: {
+            weight: {
+              value: variant.weight,
+              unit: variant.weightUnit?.toUpperCase() || 'GRAMS'
+            }
+          }
+        }
+      }
+      
+      // Option values for new product model
+      if (variant.optionValues?.length) {
+        variantInput.optionValues = variant.optionValues.map(opt => ({
+          optionName: opt.optionName,
+          name: opt.name
+        }))
+      }
+      
+      // Add metafields if exist on variant
+      if (variant.metafields?.length) {
+        variantInput.metafields = variant.metafields.map(meta => ({
+          namespace: meta.namespace,
+          key: meta.key,
+          value: meta.value,
+          type: meta.type
+        }))
+      }
+      
+      return variantInput
+    })
+  }
+  
+  // Add metafields if exist
+  if (this.metafields?.length) {
+    input.metafields = this.metafields.map(meta => ({
+      namespace: meta.namespace,
+      key: meta.key,
+      value: meta.value,
+      type: meta.type
+    }))
+  }
+  
+  return input
+}
+
 // Convert variants for productVariantsBulkCreate mutation
 productSchema.methods.toShopifyVariantsInput = function() {
   if (!this.variants?.length) return []

@@ -14,6 +14,9 @@ import Layout from '@/components/Layout'
 import Dashboard from '@/pages/Dashboard'
 import Stores from '@/pages/Stores'
 import Products from '@/pages/Products'
+import ProductCreate from '@/pages/ProductCreate'
+import ProductDetail from '@/pages/ProductDetail'
+import { StorePushPageWrapper } from '@/features/products/components/StorePush'
 import Settings from '@/pages/Settings'
 
 // Auth components
@@ -37,6 +40,9 @@ const router = createBrowserRouter(
         <Route index element={<Dashboard />} />
         <Route path="stores" element={<Stores />} />
         <Route path="products" element={<Products />} />
+        <Route path="products/create" element={<ProductCreate />} />
+        <Route path="products/:id" element={<ProductDetail />} />
+        <Route path="products/:id/push" element={<StorePushPageWrapper />} />
         <Route path="settings" element={<Settings />} />
       </Route>
     </>

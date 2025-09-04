@@ -11,6 +11,8 @@ import notificationRoutes from './src/routes/notificationRoutes.js';
 import shopifyRoutes from './src/routes/shopifyRoutes.js';
 import productRoutes from './src/routes/productRoutesNew.js';
 import shopifyGraphQLRoutes from './src/routes/shopifyGraphQLRoutesNew.js';
+import collectionRoutes from './src/routes/collectionRoutes.js';
+import inventoryRoutes from './src/routes/inventoryRoutes.js';
 
 // Import webhook handlers directly for early middleware setup
 import { 
@@ -147,10 +149,11 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/shopify', shopifyRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/shopify-admin', shopifyGraphQLRoutes);
+app.use('/api/collections', collectionRoutes);
+app.use('/api/inventory', inventoryRoutes);
 
 // Future routes will be added here
 // app.use('/api/stores', storeRoutes);
-// app.use('/api/collections', collectionRoutes);
 
 // Global error handling middleware
 app.use((err, req, res, next) => {

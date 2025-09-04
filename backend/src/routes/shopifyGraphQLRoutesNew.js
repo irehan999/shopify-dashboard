@@ -10,61 +10,60 @@ import * as shopifyController from '../controllers/shopifyGraphQLControllerNew.j
 
 // Import correct middleware
 import { authenticateUser } from '../middleware/auth.js';
-import { validateShopifySession } from '../middleware/shopifySession.js';
+import { createStoreSession, createBulkStoreSessions } from '../middleware/storeSession.js';
 
 const router = express.Router();
 
-// Apply authentication and Shopify session validation to all routes
+// Apply authentication to all routes
 router.use(authenticateUser);
-router.use(validateShopifySession);
 
 /**
  * Product Creation Routes
  * POST /api/shopify/products/:productId/stores/:storeId/create
  */
-router.post('/products/:productId/stores/:storeId/create', shopifyController.executeCreateProduct);
+router.post('/products/:productId/stores/:storeId/create', createStoreSession, shopifyController.executeCreateProduct);
 
 /**
  * Product Update Routes  
  * PUT /api/shopify/products/:productId/stores/:storeId/update
  */
-router.put('/products/:productId/stores/:storeId/update', shopifyController.executeUpdateProduct);
+router.put('/products/:productId/stores/:storeId/update', createStoreSession, shopifyController.executeUpdateProduct);
 
 /**
  * Product Sync Routes
  * POST /api/shopify/products/:productId/stores/:storeId/sync
  */
-router.post('/products/:productId/stores/:storeId/sync', shopifyController.executeSyncProduct);
+router.post('/products/:productId/stores/:storeId/sync', createStoreSession, shopifyController.executeSyncProduct);
 
 /**
  * Product Deletion Routes
  * DELETE /api/shopify/products/:productId/stores/:storeId
  */
-router.delete('/products/:productId/stores/:storeId', shopifyController.executeDeleteProduct);
+router.delete('/products/:productId/stores/:storeId', createStoreSession, shopifyController.executeDeleteProduct);
 
 /**
  * Get Shopify Product Data
  * GET /api/shopify/products/:productId/stores/:storeId
  */
-router.get('/products/:productId/stores/:storeId', shopifyController.getShopifyProduct);
+router.get('/products/:productId/stores/:storeId', createStoreSession, shopifyController.getShopifyProduct);
 
 /**
  * Store Inventory Routes
  * GET /api/shopify/products/:productId/stores/:storeId/inventory
  */
-router.get('/products/:productId/stores/:storeId/inventory', shopifyController.getStoreInventory);
+router.get('/products/:productId/stores/:storeId/inventory', createStoreSession, shopifyController.getStoreInventory);
 
 /**
  * Search Store Products
  * GET /api/shopify/stores/:storeId/products/search
  */
-router.get('/stores/:storeId/products/search', shopifyController.searchShopifyProducts);
+router.get('/stores/:storeId/products/search', createStoreSession, shopifyController.searchShopifyProducts);
 
 /**
  * Bulk Operations Routes
  * POST /api/shopify/stores/:storeId/products/bulk-sync
  */
-router.post('/stores/:storeId/products/bulk-sync', shopifyController.executeBulkSync);
+router.post('/stores/:storeId/products/bulk-sync', createStoreSession, shopifyController.executeBulkSync);
 
 /**
  * Health Check Route

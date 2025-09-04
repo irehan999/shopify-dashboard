@@ -95,7 +95,51 @@ const productMapSchema = new mongoose.Schema({
       customPrice: Number,
       customCompareAtPrice: Number,
       customSku: String,
-      isActive: { type: Boolean, default: true }
+      isActive: { type: Boolean, default: true },
+      
+      // Inventory tracking for this variant in this store
+      inventoryTracking: {
+        // Inventory assigned from master product to this store
+        assignedQuantity: { type: Number, default: 0 },
+        assignedAt: Date,
+        assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        
+        // Last known inventory in Shopify store (from last sync)
+        lastKnownShopifyQuantity: { type: Number, default: 0 },
+        lastInventorySyncAt: Date,
+        
+        // Inventory sync settings
+        inventoryPolicy: {
+          type: String,
+          enum: ['deny', 'continue'], // Shopify inventory policy
+          default: 'deny'
+        },
+        trackQuantity: { type: Boolean, default: true },
+        
+        // Location-specific inventory (for multi-location stores)
+        locationInventory: [{
+          locationId: { type: String, required: true }, // Shopify location ID
+          locationName: String,
+          assignedQuantity: { type: Number, default: 0 },
+          lastKnownQuantity: { type: Number, default: 0 },
+          lastSyncAt: Date
+        }],
+        
+        // Inventory sync history
+        inventoryHistory: [{
+          action: {
+            type: String,
+            enum: ['assigned', 'synced', 'adjusted', 'sold', 'returned'],
+            required: true
+          },
+          quantity: { type: Number, required: true },
+          previousQuantity: Number,
+          reason: String,
+          timestamp: { type: Date, default: Date.now },
+          syncedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+          locationId: String // If location-specific
+        }]
+      }
     }],
     
     // Media mappings (dashboard media to Shopify media)
@@ -334,6 +378,132 @@ productMapSchema.methods.updateVariantMapping = function(storeId, dashboardVaria
   storeMapping.updatedAt = new Date()
   return this.save()
 }
+
+// Method to assign inventory to a store variant
+productMapSchema.methods.assignInventoryToStore = function(storeId, variantIndex, quantity, locationId, userId) {
+  const storeMapping = this.getStoreMapping(storeId);
+  if (!storeMapping) {
+    throw new Error('Store mapping not found');
+  }
+  
+  const variant = storeMapping.variantMappings.find(vm => vm.dashboardVariantIndex === variantIndex);
+  if (!variant) {
+    throw new Error('Variant mapping not found');
+  }
+  
+  // Update assigned quantity
+  variant.inventoryTracking.assignedQuantity = quantity;
+  variant.inventoryTracking.assignedAt = new Date();
+  variant.inventoryTracking.assignedBy = userId;
+  
+  // Add to inventory history
+  variant.inventoryTracking.inventoryHistory.push({
+    action: 'assigned',
+    quantity: quantity,
+    previousQuantity: variant.inventoryTracking.assignedQuantity || 0,
+    reason: 'Manual assignment',
+    timestamp: new Date(),
+    syncedBy: userId,
+    locationId: locationId
+  });
+  
+  // Update location-specific inventory
+  if (locationId) {
+    const locationInv = variant.inventoryTracking.locationInventory.find(li => li.locationId === locationId);
+    if (locationInv) {
+      locationInv.assignedQuantity = quantity;
+      locationInv.lastSyncAt = new Date();
+    } else {
+      variant.inventoryTracking.locationInventory.push({
+        locationId: locationId,
+        assignedQuantity: quantity,
+        lastKnownQuantity: 0,
+        lastSyncAt: new Date()
+      });
+    }
+  }
+  
+  return this.save();
+};
+
+// Method to sync inventory from Shopify (update last known quantities)
+productMapSchema.methods.syncInventoryFromShopify = function(storeId, variantIndex, shopifyQuantity, locationId) {
+  const storeMapping = this.getStoreMapping(storeId);
+  if (!storeMapping) {
+    throw new Error('Store mapping not found');
+  }
+  
+  const variant = storeMapping.variantMappings.find(vm => vm.dashboardVariantIndex === variantIndex);
+  if (!variant) {
+    throw new Error('Variant mapping not found');
+  }
+  
+  const previousQuantity = variant.inventoryTracking.lastKnownShopifyQuantity;
+  
+  // Update last known quantity
+  variant.inventoryTracking.lastKnownShopifyQuantity = shopifyQuantity;
+  variant.inventoryTracking.lastInventorySyncAt = new Date();
+  
+  // Add to inventory history
+  variant.inventoryTracking.inventoryHistory.push({
+    action: 'synced',
+    quantity: shopifyQuantity,
+    previousQuantity: previousQuantity,
+    reason: 'Shopify sync',
+    timestamp: new Date(),
+    locationId: locationId
+  });
+  
+  // Update location-specific inventory
+  if (locationId) {
+    const locationInv = variant.inventoryTracking.locationInventory.find(li => li.locationId === locationId);
+    if (locationInv) {
+      locationInv.lastKnownQuantity = shopifyQuantity;
+      locationInv.lastSyncAt = new Date();
+    }
+  }
+  
+  return this.save();
+};
+
+// Method to get inventory summary for a store
+productMapSchema.methods.getInventorySummary = function(storeId) {
+  const storeMapping = this.getStoreMapping(storeId);
+  if (!storeMapping) {
+    return null;
+  }
+  
+  const summary = {
+    storeId: storeId,
+    totalVariants: storeMapping.variantMappings.length,
+    totalAssigned: 0,
+    totalLastKnown: 0,
+    variants: [],
+    lastSyncAt: null
+  };
+  
+  storeMapping.variantMappings.forEach(variant => {
+    const inv = variant.inventoryTracking;
+    summary.totalAssigned += inv.assignedQuantity || 0;
+    summary.totalLastKnown += inv.lastKnownShopifyQuantity || 0;
+    
+    if (inv.lastInventorySyncAt && (!summary.lastSyncAt || inv.lastInventorySyncAt > summary.lastSyncAt)) {
+      summary.lastSyncAt = inv.lastInventorySyncAt;
+    }
+    
+    summary.variants.push({
+      variantIndex: variant.dashboardVariantIndex,
+      shopifyVariantId: variant.shopifyVariantId,
+      assigned: inv.assignedQuantity || 0,
+      lastKnown: inv.lastKnownShopifyQuantity || 0,
+      difference: (inv.lastKnownShopifyQuantity || 0) - (inv.assignedQuantity || 0),
+      lastSyncAt: inv.lastInventorySyncAt,
+      locations: inv.locationInventory
+    });
+  });
+  
+  return summary;
+};
 
 // Method to get default sync settings
 productMapSchema.methods.getDefaultSyncSettings = function() {

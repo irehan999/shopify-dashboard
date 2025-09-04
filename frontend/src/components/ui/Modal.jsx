@@ -2,7 +2,7 @@ import { Fragment } from 'react'
 import { Dialog, DialogPanel, DialogTitle, Transition, TransitionChild } from '@headlessui/react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { cn } from '@/utils/cn'
-import Button from './Button'
+import {Button} from './Button'
 
 const Modal = ({
   isOpen,

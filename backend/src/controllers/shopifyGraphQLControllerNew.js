@@ -30,6 +30,10 @@ import {
 } from '../graphql/mutations/mediaMutations.js';
 
 import {
+  getPrimaryLocationId
+} from '../graphql/queries/locationQueries.js';
+
+import {
   getProducts,
   getProduct,
   getProductsByHandles,
@@ -258,7 +262,12 @@ export const executeUpdateProduct = asyncHandler(async (req, res) => {
  */
 export const executeSyncProduct = asyncHandler(async (req, res) => {
   const { productId, storeId } = req.params;
-  const { forceSync = false } = req.body;
+  const { 
+    forceSync = false, 
+    collectionsToJoin = [], 
+    inventoryData = {},
+    locationId 
+  } = req.body;
 
   try {
     // Get product with all relations
@@ -278,52 +287,131 @@ export const executeSyncProduct = asyncHandler(async (req, res) => {
 
     // Check if mapping exists
     let mapping = await ProductMap.findOne({
-      dashboardProductId: productId,
-      storeId: storeId
+      dashboardProduct: productId,
+      'storeMappings.store': storeId
     });
 
     let result;
     let operation;
 
-    if (!mapping || forceSync) {
-      // Create new product in Shopify
-      const productInput = product.toShopifyProductInput();
-      result = await syncProduct(session, productInput);
-      operation = 'created';
+    // Get primary location ID for inventory management if not provided
+    const targetLocationId = locationId || await getPrimaryLocationId(session);
 
-      // Create or update mapping
-      if (mapping) {
-        await ProductMap.findByIdAndUpdate(mapping._id, {
-          shopifyProductId: result.product.id,
-          handle: result.product.handle,
-          lastSyncAt: new Date(),
-          syncStatus: 'active'
-        });
-      } else {
-        mapping = await ProductMap.create({
-          dashboardProductId: productId,
-          shopifyProductId: result.product.id,
-          storeId: storeId,
-          handle: result.product.handle,
-          lastSyncAt: new Date(),
-          syncStatus: 'active'
-        });
+    // Use productSet mutation for upsert functionality (Shopify recommended approach)
+    const productSetInput = product.toShopifyProductSetInput(targetLocationId, collectionsToJoin);
+    result = await syncProduct(session, productSetInput);
+    
+    // Determine operation based on whether mapping existed
+    operation = mapping ? 'updated' : 'created';
+
+    // Create or update mapping
+    if (mapping) {
+      // Update existing store mapping
+      const storeMapping = mapping.getStoreMapping(storeId);
+      if (storeMapping) {
+        storeMapping.shopifyProductId = result.product.id;
+        storeMapping.shopifyHandle = result.product.handle;
+        storeMapping.lastSyncAt = new Date();
+        storeMapping.status = 'active';
+        storeMapping.updatedAt = new Date();
+        
+        // Update variant mappings with new Shopify variant IDs
+        if (result.product.variants) {
+          result.product.variants.edges.forEach((variantEdge, index) => {
+            const variant = variantEdge.node;
+            mapping.updateVariantMapping(storeId, index, variant.id);
+            
+            // Assign inventory if provided
+            if (inventoryData[index] && inventoryData[index].assignedQuantity) {
+              mapping.assignInventoryToStore(
+                storeId, 
+                index, 
+                inventoryData[index].assignedQuantity,
+                targetLocationId,
+                req.user?.id // Assuming user is in request
+              );
+            }
+          });
+        }
+        
+        await mapping.save();
       }
     } else {
-      // Update existing product
-      const updateInput = {
-        id: mapping.shopifyProductId,
-        ...product.toShopifyProductInput()
-      };
-      result = await updateProduct(session, updateInput);
-      operation = 'updated';
-
-      // Update mapping
-      await ProductMap.findByIdAndUpdate(mapping._id, {
-        lastSyncAt: new Date(),
-        syncStatus: 'active'
+      // Create new mapping using the complex schema
+      mapping = new ProductMap({
+        dashboardProduct: productId,
+        createdBy: req.user?.id, // Assuming user is in request
+        storeMappings: [{
+          store: storeId,
+          shopifyProductId: result.product.id,
+          shopifyHandle: result.product.handle,
+          status: 'active',
+          syncSettings: {
+            autoSync: true,
+            syncTitle: true,
+            syncDescription: true,
+            syncPrice: true,
+            syncInventory: true,
+            syncMedia: true,
+            syncSEO: true,
+            syncTags: true,
+            syncVariants: true,
+            syncStatus: true
+          },
+          variantMappings: [],
+          lastSyncAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }],
+        mappingStats: {
+          totalStores: 1,
+          activeStores: 1,
+          totalSyncs: 1,
+          successfulSyncs: 1,
+          failedSyncs: 0
+        }
       });
+      
+      // Add variant mappings with inventory tracking
+      if (result.product.variants) {
+        result.product.variants.edges.forEach((variantEdge, index) => {
+          const variant = variantEdge.node;
+          mapping.storeMappings[0].variantMappings.push({
+            dashboardVariantIndex: index,
+            shopifyVariantId: variant.id,
+            isActive: true,
+            inventoryTracking: {
+              assignedQuantity: inventoryData[index]?.assignedQuantity || 0,
+              assignedAt: inventoryData[index]?.assignedQuantity ? new Date() : null,
+              assignedBy: inventoryData[index]?.assignedQuantity ? req.user?.id : null,
+              lastKnownShopifyQuantity: 0,
+              inventoryPolicy: 'deny',
+              trackQuantity: true,
+              locationInventory: targetLocationId ? [{
+                locationId: targetLocationId,
+                assignedQuantity: inventoryData[index]?.assignedQuantity || 0,
+                lastKnownQuantity: 0,
+                lastSyncAt: new Date()
+              }] : [],
+              inventoryHistory: inventoryData[index]?.assignedQuantity ? [{
+                action: 'assigned',
+                quantity: inventoryData[index].assignedQuantity,
+                previousQuantity: 0,
+                reason: 'Initial assignment during sync',
+                timestamp: new Date(),
+                syncedBy: req.user?.id,
+                locationId: targetLocationId
+              }] : []
+            }
+          });
+        });
+      }
+      
+      await mapping.save();
     }
+
+    // Get inventory summary for response
+    const inventorySummary = mapping.getInventorySummary(storeId);
 
     const response = {
       success: true,
@@ -331,15 +419,20 @@ export const executeSyncProduct = asyncHandler(async (req, res) => {
       shopifyProduct: result.product,
       mapping: {
         dashboardProductId: productId,
-        shopifyProductId: mapping.shopifyProductId,
+        shopifyProductId: result.product.id,
         storeId: storeId,
-        handle: mapping.handle
+        handle: result.product.handle
       },
+      collections: {
+        requested: collectionsToJoin,
+        synced: collectionsToJoin.length
+      },
+      inventory: inventorySummary,
       executionTime: new Date()
     };
 
     res.status(200).json(
-      new ApiResponse(200, response, `Product successfully ${operation} in Shopify`)
+      new ApiResponse(200, response, `Product successfully ${operation} in Shopify with collections and inventory`)
     );
 
   } catch (error) {

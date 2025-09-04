@@ -893,6 +893,113 @@ const handleOrderUpdate = asyncHandler(async (req, res) => {
   }
 });
 
+/**
+ * Get store summary with key metrics
+ * GET /api/shopify/stores/:storeId/summary
+ */
+const getStoreSummary = asyncHandler(async (req, res) => {
+  const { storeId } = req.params;
+  const userId = req.user._id;
+
+  const store = await Store.findOne({ _id: storeId, userId, isActive: true });
+  
+  if (!store) {
+    throw new ApiError(404, 'Store not found');
+  }
+
+  try {
+    const session = await getStoreSession(store);
+    const client = new shopify.clients.Graphql({ session });
+
+    // Get shop details and basic metrics
+    const query = `
+      query {
+        shop {
+          id
+          name
+          email
+          currencyCode
+          plan {
+            displayName
+          }
+          billingAddress {
+            country
+            province
+            city
+          }
+        }
+        products(first: 1) {
+          edges {
+            node {
+              id
+            }
+          }
+          pageInfo {
+            hasNextPage
+          }
+        }
+        collections(first: 1) {
+          edges {
+            node {
+              id
+            }
+          }
+          pageInfo {
+            hasNextPage
+          }
+        }
+        orders(first: 1) {
+          edges {
+            node {
+              id
+              totalPriceSet {
+                shopMoney {
+                  amount
+                  currencyCode
+                }
+              }
+            }
+          }
+          pageInfo {
+            hasNextPage
+          }
+        }
+      }
+    `;
+
+    const response = await client.request(query);
+    const { shop, products, collections, orders } = response.data;
+
+    // Build summary response
+    const summary = {
+      store: {
+        id: shop.id,
+        name: shop.name,
+        email: shop.email,
+        currency: shop.currencyCode,
+        plan: shop.plan?.displayName,
+        location: {
+          country: shop.billingAddress?.country,
+          province: shop.billingAddress?.province,
+          city: shop.billingAddress?.city
+        }
+      },
+      metrics: {
+        hasProducts: products.edges.length > 0 || products.pageInfo.hasNextPage,
+        hasCollections: collections.edges.length > 0 || collections.pageInfo.hasNextPage,
+        hasOrders: orders.edges.length > 0 || orders.pageInfo.hasNextPage
+      },
+      lastSyncAt: store.lastSyncAt,
+      syncStatus: store.syncStatus
+    };
+
+    res.json(new ApiResponse(200, summary, 'Store summary retrieved'));
+  } catch (error) {
+    console.error('Store summary fetch error:', error);
+    throw new ApiError(500, 'Failed to fetch store summary');
+  }
+});
+
 export {
   // OAuth and Store Management
   initiateAuth,
@@ -901,6 +1008,7 @@ export {
   getConnectedStores,
   disconnectStore,
   getStoreAnalytics,
+  getStoreSummary,
   validateSession,
   
   // Webhook Handlers
@@ -909,7 +1017,6 @@ export {
   handleProductUpdate,
   handleProductDelete,
   handleOrderCreate,
-  handleOrderUpdate
-  ,
+  handleOrderUpdate,
   linkStoreToUser
 };
