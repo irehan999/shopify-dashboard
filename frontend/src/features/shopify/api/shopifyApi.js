@@ -1,75 +1,88 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+/**
+ * Shopify API Functions
+ * Store management, OAuth, and store-related operations
+ */
 import { api } from '@/lib/api';
-import { queryKeys } from '@/lib';
 
-// Initiate OAuth flow  
-export const useInitiateShopifyAuth = () => {
-  return useMutation({
-    mutationFn: async (shop) => {
-      const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-      const oauthUrl = `${backendUrl}/api/shopify/auth?shop=${encodeURIComponent(shop)}`;
-      
-      // Direct redirect to backend OAuth endpoint
-      window.location.href = oauthUrl;
-      
-      return { success: true };
-    },
-    onError: (error) => {
-      console.error('OAuth initiation failed:', error);
-    }
-  });
-};
-
-
-// Get connected stores
-export const useConnectedStores = () => {
-  return useQuery({
-  queryKey: queryKeys.stores.list('connected'),
-    queryFn: async () => {
-      const response = await api.get('/api/shopify/stores');
-      return response.data.data;
-    }
-  });
-};
-
-// Disconnect store
-export const useDisconnectStore = () => {
-  const queryClient = useQueryClient();
+/**
+ * Initiate OAuth flow with Shopify
+ * @param {string} shop - Shop domain to connect
+ * @returns {Promise} - OAuth initiation response
+ */
+export const initiateShopifyAuth = async (shop) => {
+  const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  const oauthUrl = `${backendUrl}/api/shopify/auth?shop=${encodeURIComponent(shop)}`;
   
-  return useMutation({
-    mutationFn: async (storeId) => {
-      const response = await api.delete(`/api/shopify/stores/${storeId}`);
-      return response.data;
-    },
-    onSuccess: () => {
-      // Invalidate connected stores query to refresh the list
-  queryClient.invalidateQueries({ queryKey: queryKeys.stores.list('connected') });
-    }
-  });
+  // Direct redirect to backend OAuth endpoint
+  window.location.href = oauthUrl;
+  
+  return { success: true };
 };
 
-// Get store analytics
-export const useStoreAnalytics = (storeId) => {
-  return useQuery({
-    queryKey: ['store-analytics', storeId],
-    queryFn: async () => {
-      const response = await api.get(`/api/shopify/stores/${storeId}/analytics`);
-      return response.data.data;
-    },
-    enabled: !!storeId
-  });
+/**
+ * Get connected stores for current user
+ * @returns {Promise} - List of connected stores
+ */
+export const getConnectedStores = async () => {
+  const response = await api.get('/api/shopify/stores');
+  return response.data.data;
 };
 
-// Link store to current user using token from OAuth callback guest flow
-export const useLinkStore = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (token) => {
-      const response = await api.post('/api/shopify/link-store', { token });
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.stores.list('connected') });
-    },
-  });
+/**
+ * Disconnect a store from current user
+ * @param {string} storeId - Store ID to disconnect
+ * @returns {Promise} - Disconnect response
+ */
+export const disconnectStore = async (storeId) => {
+  const response = await api.delete(`/api/shopify/stores/${storeId}`);
+  return response.data;
+};
+
+/**
+ * Get store analytics data
+ * @param {string} storeId - Store ID to get analytics for
+ * @returns {Promise} - Store analytics data
+ */
+export const getStoreAnalytics = async (storeId) => {
+  const response = await api.get(`/api/shopify/stores/${storeId}/analytics`);
+  return response.data.data;
+};
+
+/**
+ * Get store summary with key metrics
+ * @param {string} storeId - Store ID to get summary for
+ * @returns {Promise} - Store summary data
+ */
+export const getStoreSummary = async (storeId) => {
+  const response = await api.get(`/api/shopify/stores/${storeId}/summary`);
+  return response.data.data;
+};
+
+/**
+ * Get store collections for collection management
+ * @param {string} storeId - Store ID to get collections for
+ * @returns {Promise} - Store collections list
+ */
+export const getStoreCollections = async (storeId) => {
+  const response = await api.get(`/api/collections/stores/${storeId}/collections`);
+  return response.data.data;
+};
+
+/**
+ * Get store locations for inventory management
+ * @returns {Promise} - Store locations list
+ */
+export const getStoreLocations = async () => {
+  const response = await api.get('/api/inventory/stores/locations');
+  return response.data.data;
+};
+
+/**
+ * Link store to current user using token from OAuth callback
+ * @param {string} token - Link token from OAuth callback
+ * @returns {Promise} - Link response
+ */
+export const linkStoreToUser = async (token) => {
+  const response = await api.post('/api/shopify/link-store', { token });
+  return response.data;
 };

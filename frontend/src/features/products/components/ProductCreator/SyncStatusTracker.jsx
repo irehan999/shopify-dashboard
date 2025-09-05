@@ -1,5 +1,5 @@
 import React from 'react';
-import { useSyncStatus } from '../../hooks/useProductApi.js';
+import { useSyncStatus } from '../../hooks/useShopifySync.js';
 
 export const SyncStatusTracker = ({ 
   isCreating, 

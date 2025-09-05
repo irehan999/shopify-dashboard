@@ -7,10 +7,11 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
  * Supports light, dark, and system theme preferences with persistence.
  * 
  * Features:
- * - Automatic system theme detection
- * - LocalStorage persistence
- * - CSS class management for theme switching
+ * - Automatic system theme detection with change listeners
+ * - LocalStorage persistence with error handling
+ * - CSS class management for theme switching with smooth transitions
  * - React Context for global theme state
+ * - Prevents theme flashing during initial load
  * 
  * Usage:
  * ```jsx
@@ -23,11 +24,11 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
  * import { useTheme } from '@/providers/ThemeProvider';
  * 
  * function MyComponent() {
- *   const { theme, setTheme, toggleTheme } = useTheme();
+ *   const { theme, setTheme, toggleTheme, effectiveTheme } = useTheme();
  *   
  *   return (
  *     <button onClick={toggleTheme}>
- *       Current theme: {theme}
+ *       Current theme: {effectiveTheme}
  *     </button>
  *   );
  * }
@@ -41,6 +42,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 
 const ThemeContext = createContext({
   theme: 'light',
+  effectiveTheme: 'light',
   setTheme: () => null,
   toggleTheme: () => null,
 });
@@ -61,39 +63,80 @@ export function ThemeProvider({
   const [theme, setTheme] = useState(() => {
     // Initialize theme from localStorage or default
     if (typeof window !== 'undefined') {
-      return localStorage.getItem(storageKey) || defaultTheme;
+      try {
+        return localStorage.getItem(storageKey) || defaultTheme;
+      } catch {
+        return defaultTheme;
+      }
     }
     return defaultTheme;
   });
 
+  const [effectiveTheme, setEffectiveTheme] = useState('light');
+
   useEffect(() => {
     const root = window.document.documentElement;
     
-    // Remove existing theme classes
-    root.classList.remove('light', 'dark');
+    const applyTheme = (themeToApply) => {
+      // Force a reflow to ensure smooth transition
+      root.style.transition = 'background-color 0.2s ease, color 0.2s ease';
+      
+      // Remove existing theme classes
+      root.classList.remove('light', 'dark');
+      
+      // Apply new theme
+      root.classList.add(themeToApply);
+      setEffectiveTheme(themeToApply);
+      
+      // Remove transition after it completes to avoid interfering with other transitions
+      setTimeout(() => {
+        root.style.transition = '';
+      }, 200);
+    };
 
     if (theme === 'system') {
-      // Use system preference
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
-        ? 'dark'
-        : 'light';
-      root.classList.add(systemTheme);
-      return;
+      // Get system preference
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const systemTheme = mediaQuery.matches ? 'dark' : 'light';
+      
+      applyTheme(systemTheme);
+      
+      // Listen for system theme changes
+      const handleChange = (e) => {
+        const newSystemTheme = e.matches ? 'dark' : 'light';
+        applyTheme(newSystemTheme);
+      };
+      
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    } else {
+      // Apply selected theme
+      applyTheme(theme);
     }
-
-    // Apply selected theme
-    root.classList.add(theme);
   }, [theme]);
 
   const value = {
     theme,
+    effectiveTheme,
     setTheme: (newTheme) => {
-      localStorage.setItem(storageKey, newTheme);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(storageKey, newTheme);
+        } catch (error) {
+          console.warn('Failed to save theme to localStorage:', error);
+        }
+      }
       setTheme(newTheme);
     },
     toggleTheme: () => {
-      const newTheme = theme === 'light' ? 'dark' : 'light';
-      localStorage.setItem(storageKey, newTheme);
+      const newTheme = effectiveTheme === 'light' ? 'dark' : 'light';
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(storageKey, newTheme);
+        } catch (error) {
+          console.warn('Failed to save theme to localStorage:', error);
+        }
+      }
       setTheme(newTheme);
     },
   };

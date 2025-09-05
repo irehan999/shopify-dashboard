@@ -5,7 +5,10 @@ import {
   useUpdateProduct, 
   useDeleteProduct
 } from '@/features/products/hooks/useProductApi';
-import { useConnectedStores } from '@/features/shopify/api/shopifyApi';
+import { useConnectedStores } from '@/features/products/hooks/useShopifySync.js';
+import { useInventorySummary, useAssignInventoryToStore } from '@/features/products/hooks/useInventoryApi.js';
+import { InventoryAssignmentModal } from '@/features/products/components/InventoryAssignmentModal.jsx';
+import LiveInventoryAllocationDashboard from '@/features/products/components/LiveInventoryAllocationDashboard.jsx';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
@@ -33,14 +36,18 @@ const ProductDetail = () => {
   const navigate = useNavigate();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [showInventoryModal, setShowInventoryModal] = useState(false);
+  const [showLiveAllocation, setShowLiveAllocation] = useState(false);
 
   // Fetch product and stores data
   const { data: product, isLoading, error, refetch } = useProduct(id);
   const { data: stores = [] } = useConnectedStores();
+  const { data: inventorySummary, isLoading: inventoryLoading } = useInventorySummary(id);
 
   // Mutations
   const updateProduct = useUpdateProduct();
   const deleteProduct = useDeleteProduct();
+  const assignInventory = useAssignInventoryToStore();
 
   const handleBack = () => {
     navigate('/products');
@@ -331,6 +338,135 @@ const ProductDetail = () => {
               </CardContent>
             </Card>
           )}
+
+          {/* Inventory Management */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <CubeIcon className="h-5 w-5 mr-2" />
+                  Inventory Management
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="flex rounded-lg border border-gray-200 p-1">
+                    <button
+                      onClick={() => setShowLiveAllocation(false)}
+                      className={`px-3 py-1 text-xs rounded transition-colors ${
+                        !showLiveAllocation
+                          ? 'bg-blue-500 text-white'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      Traditional
+                    </button>
+                    <button
+                      onClick={() => setShowLiveAllocation(true)}
+                      className={`px-3 py-1 text-xs rounded transition-colors ${
+                        showLiveAllocation
+                          ? 'bg-blue-500 text-white'
+                          : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      Live Allocation
+                    </button>
+                  </div>
+                  {!showLiveAllocation && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowInventoryModal(true)}
+                    >
+                      Manage Inventory
+                    </Button>
+                  )}
+                </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!showLiveAllocation ? (
+                // Traditional Inventory View
+                <>
+                  {inventoryLoading ? (
+                    <div className="flex justify-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                    </div>
+                  ) : inventorySummary ? (
+                    <div className="space-y-4">
+                      {/* Master Inventory Summary */}
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-900 mb-2">Master Inventory</h4>
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <span className="text-gray-500">Total Variants:</span>
+                              <span className="ml-2 font-medium">{inventorySummary.masterInventory?.length || 0}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500">Total Stock:</span>
+                              <span className="ml-2 font-medium">
+                                {inventorySummary.masterInventory?.reduce((sum, variant) => sum + (variant.masterQuantity || 0), 0) || 0} units
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Store Inventory */}
+                      {inventorySummary.storeInventory && inventorySummary.storeInventory.length > 0 ? (
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-900 mb-2">Store Inventory</h4>
+                          <div className="space-y-2">
+                            {inventorySummary.storeInventory.map((store) => (
+                              <div key={store.storeId} className="bg-gray-50 rounded-lg p-3">
+                                <div className="flex items-center justify-between mb-2">
+                                  <h5 className="font-medium text-sm">{store.storeName}</h5>
+                                  <Badge variant="outline" className="text-xs">
+                                    {store.totalVariants} variants
+                                  </Badge>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                  <div>
+                                    <span className="text-gray-500">Assigned:</span>
+                                    <span className="ml-2 font-medium text-blue-600">{store.totalAssigned} units</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-500">In Shopify:</span>
+                                    <span className="ml-2 font-medium text-green-600">{store.totalLastKnown} units</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center py-4">
+                          <CubeIcon className="h-12 w-12 text-gray-400 mx-auto mb-2" />
+                          <p className="text-gray-500 text-sm">No inventory assigned to stores yet</p>
+                          <p className="text-gray-400 text-xs">Push this product to stores to manage inventory</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-4">
+                      <p className="text-gray-500 text-sm">Unable to load inventory data</p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                // Live Allocation View
+                <LiveInventoryAllocationDashboard
+                  productId={id}
+                  onAllocationChange={(variantId, allocation) => {
+                    console.log('Allocation changed:', variantId, allocation);
+                    // Handle allocation changes here
+                    toast.success('Allocation updated successfully!');
+                  }}
+                  showRecommendations={true}
+                  compactMode={false}
+                />
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* Sidebar */}
@@ -487,6 +623,14 @@ const ProductDetail = () => {
           The copy will be saved as a draft and can be edited before publishing.
         </p>
       </Modal>
+
+      {/* Inventory Assignment Modal */}
+      <InventoryAssignmentModal
+        isOpen={showInventoryModal}
+        onClose={() => setShowInventoryModal(false)}
+        product={product}
+        inventorySummary={inventorySummary}
+      />
     </div>
   );
 };

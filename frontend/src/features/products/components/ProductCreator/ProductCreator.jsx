@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useProductForm } from '../../hooks/useProductForm.js';
 import { useCreateProduct } from '../../hooks/useProductApi.js';
 import { StepIndicator } from './StepIndicator.jsx';
@@ -7,9 +8,12 @@ import { OptionsForm } from './OptionsForm.jsx';
 import { VariantsForm } from './VariantsForm.jsx';
 import { MediaForm } from './MediaForm.jsx';
 import { ActionBar } from './ActionBar.jsx';
+import { Button } from '@/components/ui/Button.jsx';
+import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 
 export const ProductCreator = ({ onSuccess, initialData }) => {
+  const navigate = useNavigate();
   const {
     form,
     currentStep,
@@ -38,7 +42,13 @@ export const ProductCreator = ({ onSuccess, initialData }) => {
       const newProduct = await createProduct.mutateAsync(productData);
       
       toast.success('Product created successfully! You can now push it to stores from the product catalog.');
-      onSuccess?.(newProduct);
+      
+      if (onSuccess) {
+        onSuccess(newProduct);
+      } else {
+        // Navigate back to products list
+        navigate('/products');
+      }
       
     } catch (error) {
       console.error('Product creation failed:', error);
@@ -51,8 +61,20 @@ export const ProductCreator = ({ onSuccess, initialData }) => {
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
-      {/* Header */}
+      {/* Header with Back Button */}
       <div className="bg-white rounded-lg shadow-sm border p-6">
+        <div className="flex items-center space-x-4 mb-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate('/products')}
+            className="flex items-center"
+          >
+            <ArrowLeftIcon className="h-4 w-4 mr-2" />
+            Back to Products
+          </Button>
+        </div>
+        
         <h1 className="text-2xl font-bold text-gray-900 mb-2">
           Create New Product
         </h1>

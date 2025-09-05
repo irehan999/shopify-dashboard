@@ -1,13 +1,13 @@
 import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Header from './Header'
-import { useTheme } from '@/hooks/useTheme'
+import { useTheme } from '@/providers/ThemeProvider'
 
 export default function Layout() {
-  const { theme } = useTheme()
+  const { effectiveTheme } = useTheme()
 
   return (
-    <div className={`min-h-screen ${theme}`}>
+    <div className={`min-h-screen ${effectiveTheme}`}>
       <div className="flex bg-gray-50 dark:bg-gray-950 transition-colors duration-200">
         {/* Sidebar */}
         <div className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0">

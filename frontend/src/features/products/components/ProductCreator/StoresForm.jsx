@@ -1,17 +1,21 @@
 import React, { useState } from 'react';
-import { useStoreSelection, useCollectionSelection } from '../../hooks/useProductApi.js';
+import { useCollectionSelection } from '../../hooks/useCollectionApi.js';
+import { useConnectedStores } from '@/features/shopify/hooks/useShopify.js';
 import { Controller } from 'react-hook-form';
 
 export const StoresForm = ({ form }) => {
   const [selectedStoreForCollections, setSelectedStoreForCollections] = useState(null);
   const [showCollectionSelector, setShowCollectionSelector] = useState(false);
   
-  const { 
-    stores, 
-    isLoading, 
-    availableStores, 
-    storeOptions 
-  } = useStoreSelection();
+  const { data: stores = [], isLoading } = useConnectedStores();
+  
+  // Filter stores for availability and create options
+  const availableStores = stores.filter(store => store.isActive && store.shopDomain);
+  const storeOptions = availableStores.map(store => ({
+    value: store._id || store.id,
+    label: store.name || store.shopDomain,
+    disabled: !store.isActive
+  }));
 
   const { control, watch, setValue } = form;
   const syncToAll = watch('storeMappings.syncToAll');

@@ -3,9 +3,9 @@ import { Modal } from '@/components/ui/Modal.jsx';
 import { Button } from '@/components/ui/Button.jsx';
 import { useNavigate } from 'react-router-dom';
 import { 
-  useSyncToAllStores,
-  useStoreSelection
+  useSyncToAllStores
 } from '../../hooks/useProductApi.js';
+import { useConnectedStores } from '@/features/shopify/hooks/useShopify.js';
 import { ShoppingBagIcon, CogIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 
@@ -17,7 +17,7 @@ export const StorePushModal = ({
   const navigate = useNavigate();
   const [isQuickPushing, setIsQuickPushing] = useState(false);
   
-  const { stores, isLoading: storesLoading } = useStoreSelection();
+  const { data: stores = [], isLoading: storesLoading } = useConnectedStores();
   const syncToAllStores = useSyncToAllStores();
 
   const handleQuickPushAll = async () => {

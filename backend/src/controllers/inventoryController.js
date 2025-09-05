@@ -8,8 +8,14 @@ import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { Product } from '../models/ProductOptimized.js';
 import { ProductMap } from '../models/ProductMap.js';
-import { getProductInventory } from '../graphql/queries/productQueries.js';
-import { getStoreLocationsQuery } from '../graphql/queries/locationQueries.js';
+import { 
+  getProductInventory,
+  getLiveInventoryLevel, 
+  getLiveProductInventoryByLocations, 
+  getInventoryAllocationSummary, 
+  getRealTimeInventoryForAllocation 
+} from '../graphql/queries/productQueries.js';
+import { getLocations } from '../graphql/queries/locationQueries.js';
 
 /**
  * Get Store Locations
@@ -22,7 +28,7 @@ export const getStoreLocations = asyncHandler(async (req, res) => {
       throw new ApiError(401, 'Shopify session required');
     }
 
-    const locationsData = await getStoreLocationsQuery(session);
+    const locationsData = await getLocations(session);
     
     const response = {
       success: true,
@@ -360,3 +366,297 @@ export const getInventoryHistory = asyncHandler(async (req, res) => {
     );
   }
 });
+
+/**
+ * Get Live Shopify Inventory Data
+ * Fetches real-time inventory levels from Shopify for allocation decisions
+ */
+export const getLiveShopifyInventory = asyncHandler(async (req, res) => {
+  try {
+    const { productId, locationIds } = req.body;
+    const session = req.session;
+
+    if (!session) {
+      throw new ApiError(401, 'Shopify session required');
+    }
+
+    if (!productId) {
+      throw new ApiError(400, 'Product ID is required');
+    }
+
+    let locations = locationIds;
+    
+    // If no specific locations provided, get all store locations
+    if (!locations || locations.length === 0) {
+      const allLocations = await getLocations(session);
+      locations = allLocations.map(loc => loc.id);
+    }
+
+    // Get live inventory data from Shopify
+    const liveInventoryData = await getLiveProductInventoryByLocations(
+      session, 
+      productId, 
+      locations
+    );
+
+    // Format the response for frontend consumption
+    const formattedInventory = {
+      productId: liveInventoryData.id,
+      productTitle: liveInventoryData.title,
+      totalInventory: liveInventoryData.totalInventory || 0,
+      variants: liveInventoryData.variants.edges.map(({ node: variant }) => ({
+        variantId: variant.id,
+        variantTitle: variant.title,
+        sku: variant.sku,
+        totalQuantity: variant.inventoryQuantity || 0,
+        inventoryPolicy: variant.inventoryPolicy,
+        inventoryManagement: variant.inventoryManagement,
+        locationBreakdown: variant.inventoryItem.inventoryLevels.edges.map(({ node: level }) => ({
+          locationId: level.location.id,
+          locationName: level.location.name,
+          available: level.available,
+          isActive: level.location.isActive,
+          fulfillsOnlineOrders: level.location.fulfillsOnlineOrders
+        }))
+      }))
+    };
+
+    res.status(200).json(
+      new ApiResponse(200, formattedInventory, 'Live inventory data retrieved successfully')
+    );
+
+  } catch (error) {
+    console.error('Live inventory fetch failed:', error);
+    throw new ApiError(
+      error.status || 500,
+      `Failed to get live inventory: ${error.message}`
+    );
+  }
+});
+
+/**
+ * Get Inventory Allocation Recommendations
+ * Analyzes current inventory levels and provides allocation suggestions
+ */
+export const getInventoryAllocationRecommendations = asyncHandler(async (req, res) => {
+  try {
+    const { productIds, allocationStrategy = 'balanced' } = req.body;
+    const session = req.session;
+
+    if (!session) {
+      throw new ApiError(401, 'Shopify session required');
+    }
+
+    if (!productIds || productIds.length === 0) {
+      throw new ApiError(400, 'Product IDs are required');
+    }
+
+    // Get comprehensive inventory data for all products
+    const inventoryData = await getInventoryAllocationSummary(session, productIds);
+    
+    // Get all locations for context
+    const allLocations = await getLocations(session);
+    const activeLocations = allLocations.filter(loc => 
+      loc.isActive && loc.fulfillsOnlineOrders && loc.shipsInventory
+    );
+
+    // Generate allocation recommendations based on strategy
+    const recommendations = inventoryData.map(product => {
+      const productRecommendations = {
+        productId: product.id,
+        productTitle: product.title,
+        totalInventory: product.totalInventory || 0,
+        variants: product.variants.edges.map(({ node: variant }) => {
+          const totalAvailable = variant.inventoryItem.inventoryLevels.edges
+            .reduce((sum, { node: level }) => sum + level.available, 0);
+
+          let allocationSuggestions = [];
+
+          if (allocationStrategy === 'balanced') {
+            // Distribute evenly across active locations
+            const perLocationAmount = Math.floor(totalAvailable / activeLocations.length);
+            const remainder = totalAvailable % activeLocations.length;
+
+            allocationSuggestions = activeLocations.map((location, index) => ({
+              locationId: location.id,
+              locationName: location.name,
+              suggestedAllocation: perLocationAmount + (index < remainder ? 1 : 0),
+              currentAvailable: variant.inventoryItem.inventoryLevels.edges
+                .find(({ node: level }) => level.location.id === location.id)?.node.available || 0
+            }));
+          } else if (allocationStrategy === 'priority') {
+            // Prioritize primary fulfillment locations
+            const primaryLocations = activeLocations.filter(loc => loc.fulfillsOnlineOrders);
+            const halfInventory = Math.floor(totalAvailable / 2);
+            
+            allocationSuggestions = activeLocations.map(location => {
+              const isPrimary = primaryLocations.includes(location);
+              const baseAllocation = isPrimary ? 
+                Math.floor(halfInventory / primaryLocations.length) : 
+                Math.floor((totalAvailable - halfInventory) / (activeLocations.length - primaryLocations.length));
+
+              return {
+                locationId: location.id,
+                locationName: location.name,
+                suggestedAllocation: Math.max(0, baseAllocation),
+                currentAvailable: variant.inventoryItem.inventoryLevels.edges
+                  .find(({ node: level }) => level.location.id === location.id)?.node.available || 0,
+                isPriority: isPrimary
+              };
+            });
+          }
+
+          return {
+            variantId: variant.id,
+            variantTitle: variant.title,
+            sku: variant.sku,
+            totalAvailable,
+            currentDistribution: variant.inventoryItem.inventoryLevels.edges.map(({ node: level }) => ({
+              locationId: level.location.id,
+              locationName: level.location.name,
+              available: level.available
+            })),
+            recommendedAllocation: allocationSuggestions,
+            allocationEfficiency: calculateAllocationEfficiency(variant.inventoryItem.inventoryLevels.edges, activeLocations)
+          };
+        })
+      };
+
+      return productRecommendations;
+    });
+
+    res.status(200).json(
+      new ApiResponse(200, {
+        recommendations,
+        allocationStrategy,
+        activeLocations: activeLocations.length,
+        totalProducts: productIds.length,
+        generatedAt: new Date().toISOString()
+      }, 'Inventory allocation recommendations generated successfully')
+    );
+
+  } catch (error) {
+    console.error('Allocation recommendations failed:', error);
+    throw new ApiError(
+      error.status || 500,
+      `Failed to generate allocation recommendations: ${error.message}`
+    );
+  }
+});
+
+/**
+ * Get Real-Time Inventory for Allocation Dashboard
+ * Provides comprehensive real-time data for allocation interface
+ */
+export const getRealTimeAllocationData = asyncHandler(async (req, res) => {
+  try {
+    const { inventoryItemIds, locationIds } = req.body;
+    const session = req.session;
+
+    if (!session) {
+      throw new ApiError(401, 'Shopify session required');
+    }
+
+    if (!inventoryItemIds || inventoryItemIds.length === 0) {
+      throw new ApiError(400, 'Inventory item IDs are required');
+    }
+
+    // Get real-time inventory levels
+    const realTimeData = await getRealTimeInventoryForAllocation(
+      session, 
+      inventoryItemIds, 
+      locationIds || []
+    );
+
+    // Group by product and variant for easier frontend consumption
+    const organizedData = realTimeData.reduce((acc, level) => {
+      const productId = level.item.variant.product.id;
+      const variantId = level.item.variant.id;
+
+      if (!acc[productId]) {
+        acc[productId] = {
+          productId,
+          productTitle: level.item.variant.product.title,
+          variants: {}
+        };
+      }
+
+      if (!acc[productId].variants[variantId]) {
+        acc[productId].variants[variantId] = {
+          variantId,
+          variantTitle: level.item.variant.title,
+          sku: level.item.sku,
+          inventoryItemId: level.item.id,
+          locations: []
+        };
+      }
+
+      acc[productId].variants[variantId].locations.push({
+        locationId: level.location.id,
+        locationName: level.location.name,
+        available: level.available,
+        isActive: level.location.isActive,
+        fulfillsOnlineOrders: level.location.fulfillsOnlineOrders,
+        shipsInventory: level.location.shipsInventory
+      });
+
+      return acc;
+    }, {});
+
+    // Convert to array format and add summary statistics
+    const allocationData = Object.values(organizedData).map(product => ({
+      ...product,
+      variants: Object.values(product.variants).map(variant => ({
+        ...variant,
+        totalAvailable: variant.locations.reduce((sum, loc) => sum + loc.available, 0),
+        activeLocations: variant.locations.filter(loc => loc.isActive).length,
+        fulfillmentLocations: variant.locations.filter(loc => loc.fulfillsOnlineOrders).length
+      }))
+    }));
+
+    res.status(200).json(
+      new ApiResponse(200, {
+        allocationData,
+        summary: {
+          totalProducts: allocationData.length,
+          totalVariants: allocationData.reduce((sum, p) => sum + p.variants.length, 0),
+          totalLocations: [...new Set(realTimeData.map(level => level.location.id))].length,
+          lastUpdated: new Date().toISOString()
+        }
+      }, 'Real-time allocation data retrieved successfully')
+    );
+
+  } catch (error) {
+    console.error('Real-time allocation data fetch failed:', error);
+    throw new ApiError(
+      error.status || 500,
+      `Failed to get real-time allocation data: ${error.message}`
+    );
+  }
+});
+
+/**
+ * Helper function to calculate allocation efficiency
+ * @param {Array} inventoryLevels - Current inventory levels
+ * @param {Array} activeLocations - Active locations
+ * @returns {number} Efficiency score (0-100)
+ */
+function calculateAllocationEfficiency(inventoryLevels, activeLocations) {
+  const totalInventory = inventoryLevels.reduce((sum, { node: level }) => sum + level.available, 0);
+  
+  if (totalInventory === 0) return 0;
+  
+  const locationsWithInventory = inventoryLevels.filter(({ node: level }) => level.available > 0).length;
+  const activeLocationCount = activeLocations.length;
+  
+  // Efficiency based on distribution across locations
+  const distributionScore = (locationsWithInventory / activeLocationCount) * 100;
+  
+  // Bonus for balanced distribution
+  const quantities = inventoryLevels.map(({ node: level }) => level.available);
+  const avg = totalInventory / quantities.length;
+  const variance = quantities.reduce((sum, qty) => sum + Math.pow(qty - avg, 2), 0) / quantities.length;
+  const balanceScore = Math.max(0, 100 - (variance / avg) * 10);
+  
+  return Math.round((distributionScore * 0.7) + (balanceScore * 0.3));
+}

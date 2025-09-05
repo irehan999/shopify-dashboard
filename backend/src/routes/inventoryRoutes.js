@@ -9,7 +9,10 @@ import {
   assignInventoryToStore,
   syncInventoryFromShopify,
   getInventorySummary,
-  getInventoryHistory
+  getInventoryHistory,
+  getLiveShopifyInventory,
+  getInventoryAllocationRecommendations,
+  getRealTimeAllocationData
 } from '../controllers/inventoryController.js';
 
 const router = Router();
@@ -28,5 +31,14 @@ router.get('/products/:productId/inventory/summary', getInventorySummary);
 
 // Get inventory change history
 router.get('/products/:productId/stores/:storeId/inventory/history', getInventoryHistory);
+
+// Live Shopify inventory data routes
+router.post('/live-inventory', getLiveShopifyInventory);
+
+// Get inventory allocation recommendations
+router.post('/allocation/recommendations', getInventoryAllocationRecommendations);
+
+// Get real-time allocation data for dashboard
+router.post('/allocation/real-time', getRealTimeAllocationData);
 
 export default router;

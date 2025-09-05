@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Plus, Store, BarChart3, ExternalLink, Trash2, Link as LinkIcon, Loader2, AlertTriangle, X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { useConnectedStores, useInitiateShopifyAuth, useDisconnectStore, useLinkStore } from '../api/shopifyApi';
+import { useConnectedStores, useInitiateShopifyAuth, useDisconnectStore, useLinkStore } from '../hooks/useShopify.js';
 
 const StoreConnection = () => {
   const [shopDomain, setShopDomain] = useState('');

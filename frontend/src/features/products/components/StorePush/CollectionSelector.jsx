@@ -1,15 +1,19 @@
 import React from 'react';
 import { Card } from '@/components/ui/Card.jsx';
-import { useCollectionSelection, useStoreDetails } from '../../hooks/useProductApi.js';
+import { useCollectionSelection } from '../../hooks/useCollectionApi.js';
+import { useConnectedStores } from '@/features/shopify/hooks/useShopify.js';
 import { CheckboxGroup } from '@/components/ui/CheckboxGroup.jsx';
 import { FolderIcon } from '@heroicons/react/24/outline';
 
 export const CollectionSelector = ({ 
   storeId, 
   selectedCollections, 
-  onSelectionChange 
+  onSelectionChange,
+  compact = false
 }) => {
-  const { data: store } = useStoreDetails(storeId);
+  const { data: stores } = useConnectedStores();
+  const store = stores?.find(s => s.id === storeId);
+  
   const { 
     collections, 
     isLoading, 
@@ -19,8 +23,8 @@ export const CollectionSelector = ({
 
   if (isLoading) {
     return (
-      <Card className="p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">
+      <Card className={compact ? "p-4" : "p-6"}>
+        <h3 className={`font-medium text-gray-900 mb-4 ${compact ? 'text-base' : 'text-lg'}`}>
           Collections for {store?.name || 'Store'}
         </h3>
         <div className="animate-pulse space-y-2">
@@ -37,13 +41,13 @@ export const CollectionSelector = ({
 
   if (error) {
     return (
-      <Card className="p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">
+      <Card className={compact ? "p-4" : "p-6"}>
+        <h3 className={`font-medium text-gray-900 mb-4 ${compact ? 'text-base' : 'text-lg'}`}>
           Collections for {store?.name || 'Store'}
         </h3>
         <div className="text-center py-4">
-          <p className="text-red-600">Failed to load collections</p>
-          <p className="text-sm text-gray-500 mt-1">{error.message}</p>
+          <p className="text-red-600 text-sm">Failed to load collections</p>
+          <p className="text-xs text-gray-500 mt-1">{error.message}</p>
         </div>
       </Card>
     );
@@ -51,13 +55,13 @@ export const CollectionSelector = ({
 
   if (collections.length === 0) {
     return (
-      <Card className="p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">
+      <Card className={compact ? "p-4" : "p-6"}>
+        <h3 className={`font-medium text-gray-900 mb-4 ${compact ? 'text-base' : 'text-lg'}`}>
           Collections for {store?.name || 'Store'}
         </h3>
         <div className="text-center py-4">
-          <FolderIcon className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-          <p className="text-gray-500">No collections available</p>
+          <FolderIcon className={`text-gray-400 mx-auto mb-2 ${compact ? 'h-6 w-6' : 'h-8 w-8'}`} />
+          <p className="text-gray-500 text-sm">No collections available</p>
           <p className="text-xs text-gray-400 mt-1">
             Product will be added without collection assignment
           </p>
@@ -66,17 +70,22 @@ export const CollectionSelector = ({
     );
   }
 
+  const gridCols = compact ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2";
+
   return (
-    <Card className="p-6">
-      <h3 className="text-lg font-medium text-gray-900 mb-4">
-        Collections for {store?.name || 'Store'}
-      </h3>
+    <Card className={compact ? "p-4" : "p-6"}>
+      {!compact && (
+        <h3 className="text-lg font-medium text-gray-900 mb-4">
+          Collections for {store?.name || 'Store'}
+        </h3>
+      )}
       
       <CheckboxGroup
         options={collectionOptions}
         value={selectedCollections}
         onChange={onSelectionChange}
-        className="grid grid-cols-1 md:grid-cols-2 gap-2"
+        className={`grid ${gridCols} gap-2`}
+        compact={compact}
       />
 
       {selectedCollections.length > 0 && (
@@ -87,9 +96,11 @@ export const CollectionSelector = ({
         </div>
       )}
 
-      <div className="mt-4 text-xs text-gray-500">
-        <p>💡 Tip: You can add the product to collections later from the Shopify admin</p>
-      </div>
+      {!compact && (
+        <div className="mt-4 text-xs text-gray-500">
+          <p>💡 Tip: You can add the product to collections later from the Shopify admin</p>
+        </div>
+      )}
     </Card>
   );
 };

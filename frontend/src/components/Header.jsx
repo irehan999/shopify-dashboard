@@ -11,12 +11,12 @@ import {
   Cog6ToothIcon,
   ArrowRightOnRectangleIcon
 } from '@heroicons/react/24/outline'
-import { useTheme } from '@/hooks/useTheme'
+import { useTheme } from '@/providers/ThemeProvider'
 import useAuthStore from '@/stores/authStore'
 import { useLogout } from '@/features/auth/hooks/useAuth'
 
 export default function Header() {
-  const { theme, toggleTheme } = useTheme()
+  const { effectiveTheme, toggleTheme } = useTheme()
   const { user } = useAuthStore()
   const navigate = useNavigate()
   const logoutMutation = useLogout()
@@ -73,9 +73,9 @@ export default function Header() {
             <button
               onClick={toggleTheme}
               className="p-2 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-200"
-              title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+              title={`Switch to ${effectiveTheme === 'light' ? 'dark' : 'light'} mode`}
             >
-              {theme === 'light' ? (
+              {effectiveTheme === 'light' ? (
                 <MoonIcon className="h-5 w-5" />
               ) : (
                 <SunIcon className="h-5 w-5" />
