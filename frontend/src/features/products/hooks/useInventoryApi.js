@@ -17,8 +17,19 @@ import { toast } from 'react-hot-toast';
 export const useStoreLocations = () => {
   return useQuery({
     queryKey: ['inventory', 'locations'],
-    queryFn: inventoryApi.getStoreLocations,
+    queryFn: async () => {
+      try {
+        return await inventoryApi.getStoreLocations();
+      } catch (e) {
+        if (e?.response?.status === 401) {
+          // No Shopify session; return empty list without throwing
+          return { data: { locations: [] } };
+        }
+        throw e;
+      }
+    },
     staleTime: 10 * 60 * 1000, // 10 minutes
+    retry: false,
     select: (data) => {
       // Format locations for easier use in components
       return data?.data?.locations || [];
@@ -88,9 +99,20 @@ export const useSyncInventoryFromShopify = () => {
 export const useInventorySummary = (productId, storeId = null) => {
   return useQuery({
     queryKey: ['inventory', 'summary', productId, storeId],
-    queryFn: () => inventoryApi.getInventorySummary(productId, storeId),
+    queryFn: async () => {
+      try {
+        return await inventoryApi.getInventorySummary(productId, storeId);
+      } catch (e) {
+        if (e?.response?.status === 404) {
+          // No product mappings yet; return null summary
+          return { data: { inventory: null } };
+        }
+        throw e;
+      }
+    },
     enabled: !!productId,
     staleTime: 2 * 60 * 1000, // 2 minutes
+    retry: false,
     select: (data) => {
       return data?.data?.inventory || null;
     }

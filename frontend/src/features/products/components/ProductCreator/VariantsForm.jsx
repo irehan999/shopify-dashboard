@@ -80,14 +80,14 @@ export const VariantsForm = ({ form }) => {
   };
 
   const getVariantTitle = (variant) => {
-    if (!variant.selectedOptions || variant.selectedOptions.length === 0) {
+    if (!variant?.optionValues || variant.optionValues.length === 0) {
       return 'Default Variant';
     }
-    
-    return variant.selectedOptions
-      .filter(opt => opt.value)
-      .map(opt => opt.value)
-      .join(' / ') || 'Unnamed Variant';
+    const names = variant.optionValues
+      .filter(ov => ov?.name)
+      .map(ov => ov.name)
+      .filter(Boolean);
+    return names.length ? names.join(' / ') : 'Unnamed Variant';
   };
 
   return (
@@ -239,7 +239,7 @@ export const VariantsForm = ({ form }) => {
                         {watchedOptions.map((option, optionIndex) => (
                           <Controller
                             key={option.name || optionIndex}
-                            name={`variants.${variantIndex}.selectedOptions.${optionIndex}.value`}
+                            name={`variants.${variantIndex}.optionValues.${optionIndex}.name`}
                             control={control}
                             render={({ field }) => (
                               <div>
@@ -248,10 +248,16 @@ export const VariantsForm = ({ form }) => {
                                 </label>
                                 <select
                                   {...field}
+                                  onChange={(e) => {
+                                    const value = e.target.value;
+                                    field.onChange(value);
+                                    // Ensure optionName stays synced with product option name
+                                    setValue(`variants.${variantIndex}.optionValues.${optionIndex}.optionName`, option.name || `Option ${optionIndex + 1}`);
+                                  }}
                                   className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                                 >
                                   <option value="">Select {option.name}</option>
-                                  {(option.values || []).map((value, valueIndex) => (
+                                  {(option.optionValues || []).map((value, valueIndex) => (
                                     <option key={valueIndex} value={value.name}>
                                       {value.name}
                                     </option>
@@ -283,10 +289,19 @@ export const VariantsForm = ({ form }) => {
                               </div>
                               <input
                                 {...field}
+                                value={field.value ?? ''}
                                 type="number"
                                 step="0.01"
                                 min="0"
-                                onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  if (v === '' || v === undefined || v === null) {
+                                    field.onChange(undefined);
+                                  } else {
+                                    const num = Number(v);
+                                    field.onChange(Number.isFinite(num) ? num : undefined);
+                                  }
+                                }}
                                 className="block w-full pl-7 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                                 placeholder="0.00"
                               />
@@ -309,10 +324,19 @@ export const VariantsForm = ({ form }) => {
                               </div>
                               <input
                                 {...field}
+                                value={field.value ?? ''}
                                 type="number"
                                 step="0.01"
                                 min="0"
-                                onChange={(e) => field.onChange(parseFloat(e.target.value) || undefined)}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  if (v === '' || v === undefined || v === null) {
+                                    field.onChange(undefined);
+                                  } else {
+                                    const num = Number(v);
+                                    field.onChange(Number.isFinite(num) ? num : undefined);
+                                  }
+                                }}
                                 className="block w-full pl-7 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                                 placeholder="0.00"
                               />
@@ -379,9 +403,18 @@ export const VariantsForm = ({ form }) => {
                             </label>
                             <input
                               {...field}
+                              value={field.value ?? ''}
                               type="number"
                               min="0"
-                              onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === '' || v === undefined || v === null) {
+                                  field.onChange(undefined);
+                                } else {
+                                  const num = parseInt(v, 10);
+                                  field.onChange(Number.isFinite(num) ? num : undefined);
+                                }
+                              }}
                               className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                               placeholder="0"
                             />
@@ -424,10 +457,19 @@ export const VariantsForm = ({ form }) => {
                             </label>
                             <input
                               {...field}
+                              value={field.value ?? ''}
                               type="number"
                               step="0.01"
                               min="0"
-                              onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === '' || v === undefined || v === null) {
+                                  field.onChange(undefined);
+                                } else {
+                                  const num = Number(v);
+                                  field.onChange(Number.isFinite(num) ? num : undefined);
+                                }
+                              }}
                               className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                               placeholder="0"
                             />

@@ -43,6 +43,22 @@ import { validateImageDimensions } from '../middleware/multer.js';
  */
 const createProduct = asyncHandler(async (req, res) => {
   const userId = req.user._id;
+  console.log("Raw Body:", req.body);
+  console.log('Files: ', req.files);
+  
+  // Parse productData if it comes as JSON string (from FormData)
+  let productData;
+  if (req.body.productData) {
+    try {
+      productData = JSON.parse(req.body.productData);
+      console.log("Parsed Product Data:", productData);
+    } catch (error) {
+      throw new ApiError(400, 'Invalid product data format');
+    }
+  } else {
+    productData = req.body;
+  }
+  
   const {
     // Basic product info
     title,
@@ -69,9 +85,8 @@ const createProduct = asyncHandler(async (req, res) => {
     metafields = [],
     
     // Dashboard specific
-    category,
     notes
-  } = req.body;
+  } = productData;
 
   // Validate required fields
   if (!title) {
@@ -103,32 +118,55 @@ const createProduct = asyncHandler(async (req, res) => {
       }
     }
 
+    
     // Process media files if uploaded
     let processedMedia = [];
     if (req.files && req.files.length > 0) {
       processedMedia = await processMediaFiles(req.files);
+    } else if (productData.media && productData.media.length > 0) {
+      // Handle media from JSON data (absolute URLs only). Reject local/relative paths like './1.webp'
+      processedMedia = productData.media
+        .map(mediaItem => {
+          const candidate = mediaItem.src || mediaItem.url || mediaItem.file?.path || '';
+          const isHttp = typeof candidate === 'string' && /^https?:\/\//i.test(candidate);
+          if (!isHttp) return null;
+          return {
+            alt: mediaItem.alt || '',
+            position: mediaItem.position || 1,
+            mediaContentType: mediaItem.mediaContentType || 'IMAGE',
+            src: candidate,
+          };
+        })
+        .filter(Boolean);
     }
 
-    // Generate handle if not provided
-    let productHandle = handle;
-    if (!productHandle) {
-      productHandle = generateProductHandle(title);
-      
-      // Check for handle uniqueness
-      const existingProduct = await Product.findOne({ handle: productHandle });
-      if (existingProduct) {
-        productHandle = `${productHandle}-${Date.now()}`;
-      }
+  // Do not auto-generate handle; Shopify will own the final handle on push
+  const productHandle = handle && handle.trim() ? handle.trim() : undefined;
+
+    // Process variants - if no variants provided but we have price data, create a default variant
+    let processedVariants = processProductVariants(variants);
+    if (processedVariants.length === 0 && productData.price !== undefined) {
+      // Create default variant for single-variant product
+      processedVariants = [{
+        price: productData.price || 0,
+        sku: productData.sku || '',
+        inventoryQuantity: productData.inventoryQuantity || 0,
+        compareAtPrice: productData.compareAtPrice || undefined,
+        weight: productData.weight || undefined,
+        weightUnit: productData.weightUnit || 'g',
+        barcode: productData.barcode || '',
+        optionValues: []
+      }];
     }
 
     // Create product with all data
-    const productData = {
+    const productDataForSave = {
       title: title.trim(),
       descriptionHtml,
       vendor: vendor?.trim(),
       productType: productType?.trim(),
       tags: tags.map(tag => tag.trim()).filter(Boolean),
-      handle: productHandle,
+  handle: productHandle,
       status,
       published,
       publishDate: publishDate ? new Date(publishDate) : undefined,
@@ -136,17 +174,16 @@ const createProduct = asyncHandler(async (req, res) => {
       giftCard,
       giftCardTemplateSuffix,
       options: processProductOptions(options),
-      variants: processProductVariants(variants),
+      variants: processedVariants,
       media: processedMedia,
       seo: processSEO(seo),
       metafields: processMetafields(metafields),
-      category: category?.trim(),
       notes: notes?.trim(),
       createdBy: userId,
       syncStatus: 'pending'
     };
 
-    const product = new Product(productData);
+    const product = new Product(productDataForSave);
     await product.save();
 
     // Populate user info for response
@@ -1146,7 +1183,7 @@ const getShopifyPreview = asyncHandler(async (req, res) => {
  */
 const processMediaFiles = async (files) => {
   const processedMedia = [];
-
+  console.log('Processing media files:', files); 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     

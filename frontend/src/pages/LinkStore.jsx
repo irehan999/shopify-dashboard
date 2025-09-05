@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/Input'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Loader2, Mail, Lock, Eye, EyeOff, Store } from 'lucide-react'
 import { useLogin, useRegister } from '@/features/auth/hooks/useAuth'
-import { useLinkStore } from '@/features/shopify/api/shopifyApi'
+import { useLinkStore } from '@/features/shopify/hooks/useShopify'
 import useAuthStore from '@/stores/authStore'
 
 const schema = z.object({

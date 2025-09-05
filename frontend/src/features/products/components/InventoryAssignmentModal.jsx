@@ -7,7 +7,7 @@ import {
   useStoreLocations,
   useAssignInventoryToStore,
   useSyncInventoryFromShopify
-} from '../../hooks/useInventoryApi.js';
+} from '../hooks/useInventoryApi.js';
 import { useConnectedStores } from '@/features/shopify/hooks/useShopify.js';
 import { toast } from 'react-hot-toast';
 

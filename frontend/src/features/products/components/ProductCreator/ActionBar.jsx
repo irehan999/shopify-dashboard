@@ -1,9 +1,11 @@
 import React from 'react';
-import { ArrowLeftIcon, ArrowRightIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, ArrowRightIcon, CheckIcon } from '@heroicons/react/24/outline';
+import { Button } from '@/components/ui/Button.jsx';
+import { classNames } from '@/lib/utils.js';
 
 export const ActionBar = ({
   currentStep,
-  totalSteps,
+  totalSteps = 4,
   isStepValid,
   isLoading,
   onPrevious,
@@ -14,46 +16,48 @@ export const ActionBar = ({
   const isLastStep = currentStep === totalSteps;
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border p-4">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <span className="text-sm text-gray-500">
-            Step {currentStep} of {totalSteps}
-          </span>
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            Step <span className="font-semibold text-gray-900 dark:text-white">{currentStep}</span> of {totalSteps}
+          </div>
           {!isStepValid && (
-            <span className="text-sm text-amber-600 bg-amber-50 px-2 py-1 rounded">
-              Complete this step to continue
-            </span>
+            <div className="flex items-center space-x-2 text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 px-3 py-1.5 rounded-full border border-amber-200 dark:border-amber-800">
+              <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
+              <span>Complete this step to continue</span>
+            </div>
           )}
         </div>
 
         <div className="flex items-center space-x-3">
           {/* Previous Button */}
-          <button
-            type="button"
+          <Button
+            variant="outline"
             onClick={onPrevious}
             disabled={isFirstStep || isLoading}
-            className={`inline-flex items-center px-4 py-2 border text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+            className={classNames(
+              "inline-flex items-center",
               isFirstStep || isLoading
-                ? 'border-gray-300 text-gray-400 bg-gray-50 cursor-not-allowed'
-                : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
-            }`}
+                ? 'opacity-50 cursor-not-allowed'
+                : 'hover:bg-gray-50 dark:hover:bg-gray-700'
+            )}
           >
             <ArrowLeftIcon className="w-4 h-4 mr-2" />
             Previous
-          </button>
+          </Button>
 
           {/* Next/Submit Button */}
           {isLastStep ? (
-            <button
-              type="button"
+            <Button
               onClick={onSubmit}
               disabled={!isStepValid || isLoading}
-              className={`inline-flex items-center px-6 py-2 border border-transparent text-sm font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+              className={classNames(
+                "inline-flex items-center px-6 py-2.5 text-sm font-medium",
                 !isStepValid || isLoading
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-700'
-              }`}
+                  ? 'opacity-50 cursor-not-allowed'
+                  : 'bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600'
+              )}
             >
               {isLoading ? (
                 <>
@@ -64,24 +68,37 @@ export const ActionBar = ({
                   Creating Product...
                 </>
               ) : (
-                'Create & Sync Product'
+                <>
+                  <CheckIcon className="w-4 h-4 mr-2" />
+                  Create Product
+                </>
               )}
-            </button>
+            </Button>
           ) : (
-            <button
-              type="button"
+            <Button
               onClick={onNext}
               disabled={!isStepValid || isLoading}
-              className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+              className={classNames(
+                "inline-flex items-center",
                 !isStepValid || isLoading
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-700'
-              }`}
+                  ? 'opacity-50 cursor-not-allowed'
+                  : ''
+              )}
             >
               Next
               <ArrowRightIcon className="w-4 h-4 ml-2" />
-            </button>
+            </Button>
           )}
+        </div>
+      </div>
+      
+      {/* Progress Indicator */}
+      <div className="mt-4">
+        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+          <div 
+            className="bg-blue-500 dark:bg-blue-600 h-1.5 rounded-full transition-all duration-300 ease-out"
+            style={{ width: `${(currentStep / totalSteps) * 100}%` }}
+          />
         </div>
       </div>
     </div>

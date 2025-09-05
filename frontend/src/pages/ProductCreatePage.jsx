@@ -1,7 +1,7 @@
 import React from 'react';
 import { ProductCreator } from '../features/products/components/ProductCreator/ProductCreator.jsx';
 
-export const ProductCreatePage = () => {
+const ProductCreatePage = () => {
   const handleSuccess = (product) => {
     console.log('Product created successfully:', product);
     // Navigate to products list or product detail page
@@ -13,3 +13,5 @@ export const ProductCreatePage = () => {
     </div>
   );
 };
+
+export default ProductCreatePage;

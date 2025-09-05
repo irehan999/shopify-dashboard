@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Controller, useFieldArray } from 'react-hook-form';
 import { useGenerateVariants } from '../../hooks/useProductApi.js';
+import { toast } from 'react-hot-toast';
 
 export const OptionsForm = ({ form }) => {
   const { control, watch, setValue, formState: { errors } } = form;
@@ -35,6 +36,16 @@ export const OptionsForm = ({ form }) => {
         setValue(`options.${i}.position`, i);
       }
     });
+    // Cascade: remove corresponding optionValues from each variant
+    const currentVariants = form.getValues('variants') || [];
+    if (currentVariants.length) {
+      const pruned = currentVariants.map(v => {
+        const ov = Array.isArray(v.optionValues) ? v.optionValues : [];
+        const newOv = ov.filter((_, i) => i !== index);
+        return { ...v, optionValues: newOv };
+      });
+      setValue('variants', pruned);
+    }
   };
 
   const addOptionValue = (optionIndex) => {
@@ -68,20 +79,19 @@ export const OptionsForm = ({ form }) => {
 
     setIsGeneratingVariants(true);
     try {
-      const result = await generateVariants.mutateAsync({
-        options: validOptions
-      });
+  const result = await generateVariants.mutateAsync({ options: validOptions });
 
       // Update form with generated variants, using base price from product
       const basePrice = form.getValues('price') || 0;
-      const variants = result.variants?.map(variant => ({
+  const variants = (result?.variants || []).map(variant => ({
         ...variant,
         price: basePrice,
         inventoryQuantity: 0,
         variantIds: []
       })) || [];
       
-      setValue('variants', variants);
+  setValue('variants', variants);
+  toast.success('Variants generated');
       
     } catch (error) {
       console.error('Failed to generate variants:', error);
@@ -99,7 +109,8 @@ export const OptionsForm = ({ form }) => {
     
     return validOptions.reduce((total, option) => {
       const validValues = option.optionValues?.filter(value => value.name) || [];
-      return total * Math.max(validValues.length, 1);
+      const count = validValues.length || 1;
+      return total * count;
     }, 1);
   };
 

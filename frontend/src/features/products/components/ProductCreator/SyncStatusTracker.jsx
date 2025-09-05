@@ -1,5 +1,6 @@
 import React from 'react';
 import { useSyncStatus } from '../../hooks/useShopifySync.js';
+import { RefreshCw, CheckCircle, XCircle, Clock, AlertCircle } from 'lucide-react';
 
 export const SyncStatusTracker = ({ 
   isCreating, 
@@ -8,43 +9,61 @@ export const SyncStatusTracker = ({
   createdProduct 
 }) => {
   // Get real-time sync status if product is created
-  const { data: syncStatuses } = useSyncStatus(createdProduct?.id);
+  const { data: syncStatuses, isLoading: statusLoading } = useSyncStatus(createdProduct?.id);
 
   const getStatusIcon = (status) => {
+    const iconProps = { className: "w-4 h-4" };
+    
     switch (status) {
       case 'pending':
         return (
-          <div className="w-4 h-4 bg-yellow-100 rounded-full flex items-center justify-center">
-            <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+          <div className="w-6 h-6 bg-yellow-100 rounded-full flex items-center justify-center">
+            <Clock {...iconProps} className="text-yellow-600" />
           </div>
         );
       case 'syncing':
         return (
-          <div className="w-4 h-4 bg-blue-100 rounded-full flex items-center justify-center">
-            <svg className="animate-spin h-3 w-3 text-blue-600" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
+          <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
+            <RefreshCw {...iconProps} className="text-blue-600 animate-spin" />
           </div>
         );
       case 'completed':
+      case 'success':
         return (
-          <div className="w-4 h-4 bg-green-100 rounded-full flex items-center justify-center">
-            <svg className="h-3 w-3 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-            </svg>
+          <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
+            <CheckCircle {...iconProps} className="text-green-600" />
           </div>
         );
       case 'failed':
+      case 'error':
         return (
-          <div className="w-4 h-4 bg-red-100 rounded-full flex items-center justify-center">
-            <svg className="h-3 w-3 text-red-600" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-            </svg>
+          <div className="w-6 h-6 bg-red-100 rounded-full flex items-center justify-center">
+            <XCircle {...iconProps} className="text-red-600" />
           </div>
         );
       default:
-        return null;
+        return (
+          <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center">
+            <AlertCircle {...iconProps} className="text-gray-600" />
+          </div>
+        );
+    }
+  };
+
+  const getStatusBadgeClass = (status) => {
+    switch (status) {
+      case 'completed':
+      case 'success':
+        return 'bg-green-100 text-green-800';
+      case 'failed':
+      case 'error':
+        return 'bg-red-100 text-red-800';
+      case 'syncing':
+        return 'bg-blue-100 text-blue-800';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -54,16 +73,15 @@ export const SyncStatusTracker = ({
       <div className="flex items-center space-x-3 mb-4">
         <div className="flex-shrink-0">
           <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-            <svg className="animate-spin h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
+            <RefreshCw className={`h-5 w-5 text-blue-600 ${(isCreating || isSyncing) ? 'animate-spin' : ''}`} />
           </div>
         </div>
         
         <div className="flex-1">
           <h3 className="text-sm font-medium text-gray-900">
-            {isCreating ? 'Creating Product...' : 'Syncing to Stores...'}
+            {isCreating ? 'Creating Product...' : 
+             isSyncing ? 'Syncing to Stores...' : 
+             'Product Status'}
           </h3>
           <p className="text-sm text-gray-600">
             {isCreating 
@@ -72,11 +90,31 @@ export const SyncStatusTracker = ({
                 ? `Syncing to all ${syncProgress.total} stores`
                 : syncProgress?.type === 'selected'
                   ? `Syncing to ${syncProgress.total} selected stores`
-                  : 'Pushing product to Shopify stores'
+                  : syncProgress?.storeIds?.length
+                    ? `Syncing to ${syncProgress.storeIds.length} stores`
+                    : 'Ready for store deployment'
             }
           </p>
         </div>
       </div>
+
+      {/* Progress Bar (if syncing) */}
+      {syncProgress && (syncProgress.completed !== undefined) && (
+        <div className="mb-4">
+          <div className="flex justify-between text-sm text-gray-600 mb-2">
+            <span>Progress</span>
+            <span>{syncProgress.completed}/{syncProgress.total}</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div 
+              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+              style={{ 
+                width: `${Math.round((syncProgress.completed / syncProgress.total) * 100)}%` 
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Detailed Sync Status */}
       {syncStatuses && syncStatuses.length > 0 && (
@@ -98,21 +136,38 @@ export const SyncStatusTracker = ({
                         {syncStatus.error}
                       </p>
                     )}
+                    {syncStatus.shopifyProductId && (
+                      <p className="text-xs text-gray-500">
+                        Shopify ID: {syncStatus.shopifyProductId}
+                      </p>
+                    )}
                   </div>
                 </div>
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  syncStatus.status === 'completed'
-                    ? 'bg-green-100 text-green-800'
-                    : syncStatus.status === 'failed'
-                      ? 'bg-red-100 text-red-800'
-                      : syncStatus.status === 'syncing'
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'bg-yellow-100 text-yellow-800'
-                }`}>
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClass(syncStatus.status)}`}>
                   {syncStatus.status}
                 </span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Loading State */}
+      {statusLoading && createdProduct && (
+        <div className="border-t pt-4">
+          <div className="flex items-center justify-center py-4">
+            <RefreshCw className="w-4 h-4 animate-spin text-gray-400 mr-2" />
+            <span className="text-sm text-gray-500">Loading sync status...</span>
+          </div>
+        </div>
+      )}
+
+      {/* No Sync Data */}
+      {!statusLoading && createdProduct && (!syncStatuses || syncStatuses.length === 0) && (
+        <div className="border-t pt-4">
+          <div className="text-center py-4">
+            <p className="text-sm text-gray-500">No sync activity yet</p>
+            <p className="text-xs text-gray-400">Product is ready for store deployment</p>
           </div>
         </div>
       )}

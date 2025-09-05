@@ -17,27 +17,12 @@ export const useProductForm = (initialData = {}) => {
   const generateVariants = useGenerateVariants();
 
   // Watch form changes
-  const watchedTitle = form.watch('title');
   const watchedVariants = form.watch('variants');
   const watchedOptions = form.watch('options');
+  const watchedProduct = form.watch(); // Watch entire form for product data
 
-  // Generate URL handle from title
-  const generateHandle = useCallback((title) => {
-    return title
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .trim();
-  }, []);
-
-  // Auto-generate handle when title changes
-  useEffect(() => {
-    const title = watchedTitle;
-    if (title && !form.getValues('handle')) {
-      form.setValue('handle', generateHandle(title));
-    }
-  }, [watchedTitle, form, generateHandle]);
+  // Note: We no longer auto-generate a handle on the client.
+  // Shopify will manage the final handle during push. Users can set it manually if needed.
 
   // Generate variants from options
   const handleGenerateVariants = useCallback(async () => {
@@ -53,7 +38,7 @@ export const useProductForm = (initialData = {}) => {
     }
 
     try {
-      const result = await generateVariants.mutateAsync(options);
+      const result = await generateVariants.mutateAsync({ options });
       const variants = result.variants.map(variant => ({
         ...variant,
         price: form.getValues('price') || 0,
@@ -67,18 +52,8 @@ export const useProductForm = (initialData = {}) => {
     }
   }, [form, generateVariants]);
 
-  // Auto-generate variants when options change
-  useEffect(() => {
-    if (watchedOptions && watchedOptions.length > 0) {
-      const hasCompleteOptions = watchedOptions.every(option => 
-        option.name && option.optionValues && option.optionValues.length > 0
-      );
-      
-      if (hasCompleteOptions) {
-        handleGenerateVariants();
-      }
-    }
-  }, [watchedOptions, handleGenerateVariants]);
+  // Disable auto-generation to avoid heavy loops; user triggers via button in OptionsForm
+  useEffect(() => {}, [watchedOptions]);
 
   // Step validation
   const validateStep = useCallback((step) => {
@@ -91,6 +66,7 @@ export const useProductForm = (initialData = {}) => {
       schema.parse(stepData);
       return true;
     } catch (error) {
+      // Keep silent during render-time checks; show field-level errors in UI instead
       return false;
     }
   }, [form]);
@@ -110,8 +86,10 @@ export const useProductForm = (initialData = {}) => {
           seo: formData.seo,
           handle: formData.handle,
           status: formData.status,
-          category: formData.category,
-          notes: formData.notes
+          notes: formData.notes,
+          price: formData.price || 0,
+          sku: formData.sku,
+          inventoryQuantity: formData.inventoryQuantity || 0
         };
       case 2:
         return {
@@ -183,6 +161,17 @@ export const useProductForm = (initialData = {}) => {
     const currentOptions = form.getValues('options') || [];
     const newOptions = currentOptions.filter((_, i) => i !== index);
     form.setValue('options', newOptions);
+
+    // Cascade: prune corresponding optionValues from each variant
+    const currentVariants = form.getValues('variants') || [];
+    if (currentVariants.length) {
+      const prunedVariants = currentVariants.map(v => {
+        const ov = Array.isArray(v.optionValues) ? v.optionValues : [];
+        const newOv = ov.filter((_, i) => i !== index);
+        return { ...v, optionValues: newOv };
+      });
+      form.setValue('variants', prunedVariants);
+    }
   }, [form]);
 
   const addOptionValue = useCallback((optionIndex) => {
@@ -230,7 +219,6 @@ export const useProductForm = (initialData = {}) => {
     options: watchedOptions,
     
     // Helper methods
-    generateHandle,
     handleGenerateVariants,
     addOption,
     removeOption,

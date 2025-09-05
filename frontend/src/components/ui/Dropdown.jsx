@@ -1,5 +1,6 @@
-import { Fragment } from 'react'
-import { Menu, MenuButton, MenuItem, MenuItems, Transition } from '@headlessui/react'
+import { Fragment, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react'
 import { ChevronDownIcon } from '@heroicons/react/20/solid'
 import { cn } from '@/utils/cn'
 
@@ -9,6 +10,7 @@ const Dropdown = ({
   align = 'right',
   width = 'w-48',
   className = '',
+  portal = true,
 }) => {
   const alignmentClasses = {
     left: 'origin-top-left left-0',
@@ -16,37 +18,95 @@ const Dropdown = ({
     center: 'origin-top left-1/2 transform -translate-x-1/2',
   }
 
+  const [portalEl, setPortalEl] = useState(null)
+  const buttonRef = useRef(null)
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 0 })
+
+  useEffect(() => {
+    let el = document.getElementById('dropdown-portal')
+    if (!el) {
+      el = document.createElement('div')
+      el.id = 'dropdown-portal'
+      document.body.appendChild(el)
+    }
+    setPortalEl(el)
+  }, [])
+
+  const updatePosition = () => {
+    const btn = buttonRef.current
+    if (!btn) return
+    const rect = btn.getBoundingClientRect()
+    setPosition({
+      top: rect.bottom + window.scrollY,
+      left: align === 'right' ? rect.right + window.scrollX : rect.left + window.scrollX,
+      width: rect.width,
+    })
+  }
+
+  useEffect(() => {
+    const onScroll = () => updatePosition()
+    const onResize = () => updatePosition()
+    window.addEventListener('scroll', onScroll, true)
+    window.addEventListener('resize', onResize)
+    return () => {
+      window.removeEventListener('scroll', onScroll, true)
+      window.removeEventListener('resize', onResize)
+    }
+  }, [])
+
   return (
     <Menu as="div" className="relative inline-block text-left">
-      <div>
-        <MenuButton as={Fragment}>
-          {trigger}
-        </MenuButton>
-      </div>
-
-      <Transition
-        as={Fragment}
-        enter="transition ease-out duration-100"
-        enterFrom="transform opacity-0 scale-95"
-        enterTo="transform opacity-100 scale-100"
-        leave="transition ease-in duration-75"
-        leaveFrom="transform opacity-100 scale-100"
-        leaveTo="transform opacity-0 scale-95"
-      >
-        <MenuItems
-          className={cn(
-            'absolute mt-2 rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-50',
-            'border border-gray-200 dark:border-gray-700',
-            width,
-            alignmentClasses[align],
-            className
-          )}
-        >
-          <div className="py-1">
-            {children}
+      {({ open }) => (
+        <>
+          <div ref={buttonRef} onClick={updatePosition}>
+            <MenuButton as={Fragment}>
+              {trigger}
+            </MenuButton>
           </div>
-        </MenuItems>
-      </Transition>
+
+          {open && (
+            portal && portalEl ? (
+              createPortal(
+                <MenuItems
+                  static
+                  className={cn(
+                    'rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-[9999]',
+                    'border border-gray-200 dark:border-gray-700',
+                    width,
+                    className
+                  )}
+                  style={{
+                    position: 'absolute',
+                    top: position.top,
+                    left: align === 'right' ? position.left - (buttonRef.current?.offsetWidth || 0) : position.left,
+                    minWidth: position.width,
+                  }}
+                >
+                  <div className="py-1">
+                    {children}
+                  </div>
+                </MenuItems>,
+                portalEl
+              )
+            ) : (
+              <MenuItems
+                static
+                className={cn(
+                  'absolute top-full mt-2 rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none z-[9999]',
+                  'border border-gray-200 dark:border-gray-700',
+                  width,
+                  alignmentClasses[align],
+                  className
+                )}
+              >
+                <div className="py-1">
+                  {children}
+                </div>
+              </MenuItems>
+            )
+          )}
+        </>
+      )}
     </Menu>
   )
 }

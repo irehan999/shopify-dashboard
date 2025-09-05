@@ -96,6 +96,17 @@ export const shopifySyncApi = {
   },
 
   /**
+   * Get sync status for a product across all stores
+   * GET /api/shopify-admin/products/:productId/sync-status
+   */
+  getSyncStatus: async (productId) => {
+    const response = await api.get(
+      `/api/shopify-admin/products/${productId}/sync-status`
+    );
+    return response.data;
+  },
+
+  /**
    * Bulk sync multiple products to store
    * POST /api/shopify-admin/stores/:storeId/products/bulk-sync
    */

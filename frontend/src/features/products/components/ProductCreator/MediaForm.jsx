@@ -57,11 +57,11 @@ export const MediaForm = ({ form }) => {
 
         // Add to form
         addMedia({
-          file,
+          file, // keep the File object; backend extracts it from FormData
           alt: '',
           position: mediaIndex + 1,
           mediaContentType: file.type.startsWith('video/') ? 'VIDEO' : 'IMAGE',
-          variantIds: [] // Will be assigned by user
+          variantIds: []
         });
       }
 
@@ -165,7 +165,7 @@ export const MediaForm = ({ form }) => {
       </div>
 
       {/* Upload Area */}
-      <div className="space-y-4">
+  <div className="space-y-3">
         <div
           {...getRootProps()}
           className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
@@ -211,7 +211,7 @@ export const MediaForm = ({ form }) => {
 
         {/* Upload progress or file count */}
         {watchedMedia.length > 0 && (
-          <div className="text-sm text-gray-600 text-center">
+          <div className="text-xs text-gray-600 text-center">
             {watchedMedia.length} of 10 files uploaded
           </div>
         )}
@@ -220,7 +220,7 @@ export const MediaForm = ({ form }) => {
       {/* Media List */}
       {watchedMedia.length > 0 ? (
         <div className="space-y-4">
-          <h3 className="text-base font-medium text-gray-900">
+          <h3 className="text-sm font-medium text-gray-900">
             Uploaded Media ({watchedMedia.length})
           </h3>
           
@@ -230,7 +230,7 @@ export const MediaForm = ({ form }) => {
               const previewUrl = getMediaPreviewUrl(media, index);
               
               return (
-                <div key={field.id} className="bg-gray-50 rounded-lg p-4 border">
+                <div key={field.id} className="bg-gray-50 rounded p-3 border">
                   <div className="flex space-x-4">
                     {/* Media Preview */}
                     <div className="flex-shrink-0 w-24 h-24">

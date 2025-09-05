@@ -5,8 +5,9 @@ import {
   useUpdateProduct, 
   useDeleteProduct
 } from '@/features/products/hooks/useProductApi';
-import { useConnectedStores } from '@/features/products/hooks/useShopifySync.js';
+import { useConnectedStores } from '@/features/shopify/hooks/useShopify.js';
 import { useInventorySummary, useAssignInventoryToStore } from '@/features/products/hooks/useInventoryApi.js';
+import { useProductSyncManagement } from '@/features/products/hooks/useShopifySync.js';
 import { InventoryAssignmentModal } from '@/features/products/components/InventoryAssignmentModal.jsx';
 import LiveInventoryAllocationDashboard from '@/features/products/components/LiveInventoryAllocationDashboard.jsx';
 import { Button } from '@/components/ui/Button';
@@ -17,10 +18,10 @@ import Dropdown from '@/components/ui/Dropdown';
 import { 
   PencilIcon,
   TrashIcon,
-  DuplicateIcon,
+  DocumentDuplicateIcon,
   EyeIcon,
   ChevronLeftIcon,
-  StoreIcon,
+  BuildingStorefrontIcon,
   CubeIcon,
   PhotoIcon,
   TagIcon,
@@ -38,11 +39,13 @@ const ProductDetail = () => {
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [showInventoryModal, setShowInventoryModal] = useState(false);
   const [showLiveAllocation, setShowLiveAllocation] = useState(false);
+  const [selectedStoreForSync, setSelectedStoreForSync] = useState(null);
 
   // Fetch product and stores data
   const { data: product, isLoading, error, refetch } = useProduct(id);
   const { data: stores = [] } = useConnectedStores();
   const { data: inventorySummary, isLoading: inventoryLoading } = useInventorySummary(id);
+  const sync = useProductSyncManagement(id);
 
   // Mutations
   const updateProduct = useUpdateProduct();
@@ -90,6 +93,17 @@ const ProductDetail = () => {
 
   const handlePushToStores = () => {
     navigate(`/products/${id}/push`);
+  };
+
+  const handleSyncToStore = async (storeId) => {
+    try {
+      setSelectedStoreForSync(storeId);
+      await sync.syncToStore(storeId, {});
+    } catch (e) {
+      // toast is handled inside hook
+    } finally {
+      setSelectedStoreForSync(null);
+    }
   };
 
   if (isLoading) {
@@ -172,7 +186,7 @@ const ProductDetail = () => {
           >
             <Dropdown.Item
               onClick={() => setShowDuplicateModal(true)}
-              icon={DuplicateIcon}
+              icon={DocumentDuplicateIcon}
             >
               Duplicate Product
             </Dropdown.Item>
@@ -204,7 +218,7 @@ const ProductDetail = () => {
                 <div className="w-24 h-24 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
                   {getMainImage() ? (
                     <img
-                      src={getMainImage().url || getMainImage().preview}
+                      src={getMainImage().src || getMainImage().url || getMainImage().preview}
                       alt={getMainImage().alt || product.title}
                       className="w-full h-full object-cover"
                     />
@@ -475,7 +489,7 @@ const ProductDetail = () => {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
-                <StoreIcon className="h-5 w-5 mr-2" />
+                <BuildingStorefrontIcon className="h-5 w-5 mr-2" />
                 Store Status
               </CardTitle>
             </CardHeader>
@@ -495,9 +509,9 @@ const ProductDetail = () => {
                         size="sm"
                         variant="outline"
                         onClick={() => handleSyncToStore(store.id)}
-                        disabled={syncToStore.isPending}
+                        disabled={sync.isSyncing}
                       >
-                        {syncToStore.isPending && selectedStoreForSync === store.id ? (
+                        {sync.isSyncing && selectedStoreForSync === store.id ? (
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
                         ) : (
                           'Sync'
@@ -508,7 +522,7 @@ const ProductDetail = () => {
                 </div>
               ) : (
                 <div className="text-center py-6">
-                  <StoreIcon className="mx-auto h-8 w-8 text-gray-400" />
+                  <BuildingStorefrontIcon className="mx-auto h-8 w-8 text-gray-400" />
                   <p className="mt-2 text-sm text-gray-500">No stores connected</p>
                   <Button size="sm" className="mt-3" onClick={() => navigate('/stores')}>
                     Connect Store

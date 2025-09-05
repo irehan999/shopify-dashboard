@@ -119,15 +119,15 @@ export const useRefreshToken = () => {
   return useMutation({
     mutationFn: authAPI.refreshToken,
     onSuccess: (data) => {
-      // Update user data with refreshed token
+      // Update user data with refreshed token via hook
       if (data.data.user) {
         login(data.data.user);
       }
       queryClient.invalidateQueries({ queryKey: ['user'] });
     },
     onError: (error) => {
-      // If refresh fails, log out the user
-      useAuthStore.getState().logout();
+      // If refresh fails, log out the user via hook
+      logout();
       const message = error.response?.data?.message || 'Session expired. Please login again.';
       toast.error(message);
     },

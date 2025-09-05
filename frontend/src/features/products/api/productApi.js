@@ -17,14 +17,29 @@ export const productApi = {
    * @param {File[]} [media] - Optional media files to upload
    * @returns {Promise<Object>} Created product with ID
    */
-  create: async (productData, media = []) => {
+  create: async (productData) => {
     const formData = new FormData();
-    
+
+    // Extract File objects from productData.media, if present
+  const productPayload = { ...productData };
+  // Prune empty handle so backend doesn't receive blank string
+  if (!productPayload.handle) delete productPayload.handle;
+    const mediaFiles = [];
+    if (Array.isArray(productPayload.media)) {
+      for (const item of productPayload.media) {
+        if (item && item.file instanceof File) {
+          mediaFiles.push(item.file);
+        }
+      }
+      // Remove media array from payload; files will be sent separately
+      delete productPayload.media;
+    }
+
     // Append product data as JSON
-    formData.append('productData', JSON.stringify(productData));
-    
-    // Append media files if provided
-    media.forEach((file, index) => {
+    formData.append('productData', JSON.stringify(productPayload));
+
+    // Append media files if any
+    mediaFiles.forEach((file) => {
       formData.append('media', file);
     });
 
@@ -33,7 +48,8 @@ export const productApi = {
         'Content-Type': 'multipart/form-data'
       }
     });
-    return response.data;
+    // Unwrap ApiResponse
+    return response.data?.data;
   },
 
   /**
@@ -56,7 +72,7 @@ export const productApi = {
    */
   getAll: async (params = {}) => {
     const response = await api.get('/api/products', { params });
-    return response.data;
+    return response.data?.data;
   },
 
   /**
@@ -67,7 +83,7 @@ export const productApi = {
    */
   getById: async (id) => {
     const response = await api.get(`/api/products/${id}`);
-    return response.data;
+    return response.data?.data;
   },
 
   /**
@@ -78,12 +94,25 @@ export const productApi = {
    * @param {File[]} [media] - Optional new media files
    * @returns {Promise<Object>} Updated product
    */
-  update: async (id, productData, media = []) => {
+  update: async (id, productData) => {
     const formData = new FormData();
-    
-    formData.append('productData', JSON.stringify(productData));
-    
-    media.forEach((file) => {
+
+    // Extract File objects from productData.media, if present
+  const productPayload = { ...productData };
+  if (!productPayload.handle) delete productPayload.handle;
+    const mediaFiles = [];
+    if (Array.isArray(productPayload.media)) {
+      for (const item of productPayload.media) {
+        if (item && item.file instanceof File) {
+          mediaFiles.push(item.file);
+        }
+      }
+      delete productPayload.media;
+    }
+
+    formData.append('productData', JSON.stringify(productPayload));
+
+    mediaFiles.forEach((file) => {
       formData.append('media', file);
     });
 
@@ -92,7 +121,7 @@ export const productApi = {
         'Content-Type': 'multipart/form-data'
       }
     });
-    return response.data;
+    return response.data?.data;
   },
 
   /**
@@ -105,8 +134,8 @@ export const productApi = {
    * @returns {Promise<Object>} Duplicated product
    */
   duplicate: async (id, options = {}) => {
-    const response = await api.post(`/api/products/${id}/duplicate`, options);
-    return response.data;
+  const response = await api.post(`/api/products/${id}/duplicate`, options);
+  return response.data?.data;
   },
 
   /**
@@ -116,8 +145,8 @@ export const productApi = {
    * @returns {Promise<Object>} Deletion confirmation
    */
   delete: async (id) => {
-    const response = await api.delete(`/api/products/${id}`);
-    return response.data;
+  const response = await api.delete(`/api/products/${id}`);
+  return response.data?.data;
   },
 
   // ==============================================
@@ -134,8 +163,8 @@ export const productApi = {
    * @returns {Promise<Object>} Updated product with new option
    */
   addOption: async (productId, optionData) => {
-    const response = await api.post(`/api/products/${productId}/options`, optionData);
-    return response.data;
+  const response = await api.post(`/api/products/${productId}/options`, optionData);
+  return response.data?.data;
   },
 
   /**
@@ -147,8 +176,8 @@ export const productApi = {
    * @returns {Promise<Object>} Updated product
    */
   updateOption: async (productId, optionIndex, optionData) => {
-    const response = await api.put(`/api/products/${productId}/options/${optionIndex}`, optionData);
-    return response.data;
+  const response = await api.put(`/api/products/${productId}/options/${optionIndex}`, optionData);
+  return response.data?.data;
   },
 
   /**
@@ -159,8 +188,8 @@ export const productApi = {
    * @returns {Promise<Object>} Updated product
    */
   deleteOption: async (productId, optionIndex) => {
-    const response = await api.delete(`/api/products/${productId}/options/${optionIndex}`);
-    return response.data;
+  const response = await api.delete(`/api/products/${productId}/options/${optionIndex}`);
+  return response.data?.data;
   },
 
   // ==============================================
@@ -175,8 +204,8 @@ export const productApi = {
    * @returns {Promise<Object>} Updated product with new variant
    */
   addVariant: async (productId, variantData) => {
-    const response = await api.post(`/api/products/${productId}/variants`, variantData);
-    return response.data;
+  const response = await api.post(`/api/products/${productId}/variants`, variantData);
+  return response.data?.data;
   },
 
   /**
@@ -188,8 +217,8 @@ export const productApi = {
    * @returns {Promise<Object>} Updated product
    */
   updateVariant: async (productId, variantIndex, variantData) => {
-    const response = await api.put(`/api/products/${productId}/variants/${variantIndex}`, variantData);
-    return response.data;
+  const response = await api.put(`/api/products/${productId}/variants/${variantIndex}`, variantData);
+  return response.data?.data;
   },
 
   /**
@@ -200,8 +229,8 @@ export const productApi = {
    * @returns {Promise<Object>} Updated product
    */
   deleteVariant: async (productId, variantIndex) => {
-    const response = await api.delete(`/api/products/${productId}/variants/${variantIndex}`);
-    return response.data;
+  const response = await api.delete(`/api/products/${productId}/variants/${variantIndex}`);
+  return response.data?.data;
   },
 
   // ==============================================
@@ -222,12 +251,12 @@ export const productApi = {
       formData.append('media', file);
     });
 
-    const response = await api.post(`/api/products/${productId}/media`, formData, {
+  const response = await api.post(`/api/products/${productId}/media`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
     });
-    return response.data;
+  return response.data?.data;
   },
 
   /**
@@ -238,8 +267,8 @@ export const productApi = {
    * @returns {Promise<Object>} Updated product
    */
   deleteMedia: async (productId, mediaIndex) => {
-    const response = await api.delete(`/api/products/${productId}/media/${mediaIndex}`);
-    return response.data;
+  const response = await api.delete(`/api/products/${productId}/media/${mediaIndex}`);
+  return response.data?.data;
   },
 
   /**
@@ -250,8 +279,8 @@ export const productApi = {
    * @returns {Promise<Object>} Updated product with reordered media
    */
   reorderMedia: async (productId, mediaOrder) => {
-    const response = await api.put(`/api/products/${productId}/media/reorder`, { mediaOrder });
-    return response.data;
+  const response = await api.put(`/api/products/${productId}/media/reorder`, { mediaOrder });
+  return response.data?.data;
   },
 
   // ==============================================
@@ -265,8 +294,8 @@ export const productApi = {
    * @returns {Promise<Object>} Shopify-formatted product data
    */
   getShopifyPreview: async (productId) => {
-    const response = await api.get(`/api/products/${productId}/shopify-preview`);
-    return response.data;
+  const response = await api.get(`/api/products/${productId}/shopify-preview`);
+  return response.data?.data;
   },
 
   // ==============================================
@@ -281,8 +310,8 @@ export const productApi = {
    * @returns {Promise<Object>} Sync result
    */
   syncToStore: async (productId, storeId) => {
-    const response = await api.post(`/api/products/${productId}/sync/${storeId}`);
-    return response.data;
+  const response = await api.post(`/api/products/${productId}/sync/${storeId}`);
+  return response.data?.data;
   },
 
   /**
@@ -292,7 +321,7 @@ export const productApi = {
    * @returns {Promise<Object>} Bulk sync result
    */
   bulkSync: async (productId) => {
-    const response = await api.post(`/api/products/${productId}/bulk-sync`);
-    return response.data;
+  const response = await api.post(`/api/products/${productId}/bulk-sync`);
+  return response.data?.data;
   }
 };

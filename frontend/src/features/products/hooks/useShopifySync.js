@@ -229,6 +229,22 @@ export const useSearchStoreProducts = () => {
 // ==============================================
 
 /**
+ * Get sync status for a product across stores
+ * @param {string} productId - Product ID to get sync status for
+ * @returns {Object} Query object with sync status data
+ */
+export const useSyncStatus = (productId) => {
+  return useQuery({
+    queryKey: ['sync-status', productId],
+    queryFn: () => shopifySyncApi.getSyncStatus(productId),
+    enabled: !!productId,
+    staleTime: 30 * 1000, // 30 seconds
+    refetchInterval: 60 * 1000, // Refetch every minute for live updates
+    select: (data) => data?.data?.syncStatuses || []
+  });
+};
+
+/**
  * Comprehensive product sync management hook
  * Combines all sync operations for a specific product
  * @param {string} productId - Product ID to manage sync for

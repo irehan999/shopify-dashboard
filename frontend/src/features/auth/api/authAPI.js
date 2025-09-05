@@ -110,7 +110,7 @@ export const authAPI = {
   /**
    * Get Current User
    * 
-   * Backend Endpoint: GET /api/auth/current-user (CORRECTED)
+   * Backend Endpoint: GET /api/auth/current-user
    * Backend Expects: Valid access token in cookies
    * Backend Returns: { user }
    * Used for: Auto-login, token validation, user data refresh

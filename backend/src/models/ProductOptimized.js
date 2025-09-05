@@ -66,7 +66,7 @@ const productSchema = new mongoose.Schema({
     trim: true,
     lowercase: true,
     maxLength: 255,
-    unique: true,
+    index: true,
     sparse: true,
     validate: {
       validator: function(v) {
@@ -178,13 +178,7 @@ const productSchema = new mongoose.Schema({
   // DASHBOARD SPECIFIC FIELDS
   // ==============================================
   
-  // Internal organization
-  category: {
-    type: String,
-    trim: true,
-    maxLength: 255
-  },
-  
+ 
   // Internal notes for dashboard users
   notes: {
     type: String,

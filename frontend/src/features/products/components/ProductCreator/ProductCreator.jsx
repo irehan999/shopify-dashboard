@@ -21,12 +21,15 @@ export const ProductCreator = ({ onSuccess, initialData }) => {
     nextStep,
     previousStep,
     isFormValid,
-    validateStep
+    validateStep,
+    product
   } = useProductForm(initialData);
 
   const createProduct = useCreateProduct();
 
   const handleSubmit = async () => {
+    console.log('Submitting form with data:', form.getValues());
+    
     if (!isFormValid()) {
       toast.error('Please fix all form errors before submitting');
       return;
@@ -34,25 +37,42 @@ export const ProductCreator = ({ onSuccess, initialData }) => {
 
     try {
       const formData = form.getValues();
+      console.log('Form data before submission:', formData);
       
       // Remove store mappings - we only create product in database
       const { storeMappings, ...productData } = formData;
       
-      // Create product in our database only
-      const newProduct = await createProduct.mutateAsync(productData);
+      // If no options, create single variant with product-level data
+      if (!productData.options || productData.options.length === 0) {
+        productData.variants = [{
+          price: productData.price || 0,
+          sku: productData.sku || '',
+          inventoryQuantity: productData.inventoryQuantity || 0,
+          optionValues: [],
+          mediaIds: []
+        }];
+      }
       
-      toast.success('Product created successfully! You can now push it to stores from the product catalog.');
+      console.log('Final product data:', productData);
+      
+      // Create product in our database only
+      const created = await createProduct.mutateAsync(productData);
+      
+      toast.success('Product created successfully!');
       
       if (onSuccess) {
-        onSuccess(newProduct);
+        onSuccess(created);
       } else {
-        // Navigate back to products list
-        navigate('/products');
+        // Navigate to product detail page (backend returns ApiResponse.data with _id)
+        const newId = created?._id || created?.id;
+        if (newId) {
+          navigate(`/products/${newId}`);
+        }
       }
       
     } catch (error) {
       console.error('Product creation failed:', error);
-      toast.error(error.message || 'Failed to create product');
+      toast.error(error?.response?.data?.message || error.message || 'Failed to create product');
     }
   };
 
@@ -60,68 +80,51 @@ export const ProductCreator = ({ onSuccess, initialData }) => {
   const isLoading = createProduct.isPending;
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
-      {/* Header with Back Button */}
-      <div className="bg-white rounded-lg shadow-sm border p-6">
-        <div className="flex items-center space-x-4 mb-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate('/products')}
-            className="flex items-center"
-          >
-            <ArrowLeftIcon className="h-4 w-4 mr-2" />
-            Back to Products
-          </Button>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Simple header (non-sticky, compact) */}
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+        <div className="px-4 sm:px-6 lg:px-8 py-3">
+          <div className="flex items-center justify-between">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate('/products')}
+              className="flex items-center text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+            >
+              <ArrowLeftIcon className="h-4 w-4 mr-2" />
+              Back
+            </Button>
+            <div className="text-xs text-gray-500 dark:text-gray-400">Step {currentStep} of 4</div>
+          </div>
         </div>
-        
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">
-          Create New Product
-        </h1>
-        <p className="text-gray-600">
-          Create a product in your dashboard - you can push to stores later
-        </p>
-        
-        <div className="mt-6">
-          <StepIndicator 
-            currentStep={currentStep} 
-            completedSteps={completedSteps}
+      </div>
+
+      {/* Step indicator as inline row (not sticky) */}
+      <div className="px-4 sm:px-6 lg:px-8 py-3 border-b border-gray-200 dark:border-gray-700">
+        <StepIndicator currentStep={currentStep} completedSteps={completedSteps} totalSteps={4} />
+      </div>
+
+      {/* Full-width form, compact spacing, sections separated by dividers */}
+      <div className="px-4 sm:px-6 lg:px-8 py-6">
+        <form onSubmit={form.handleSubmit(handleSubmit)} className="w-full">
+          {currentStep === 1 && <BasicInfoForm form={form} />}
+          {currentStep === 2 && <OptionsForm form={form} />}
+          {currentStep === 3 && <VariantsForm form={form} />}
+          {currentStep === 4 && <MediaForm form={form} />}
+        </form>
+
+        <div className="mt-4">
+          <ActionBar
+            currentStep={currentStep}
             totalSteps={4}
+            isStepValid={isStepValid}
+            isLoading={isLoading}
+            onPrevious={previousStep}
+            onNext={nextStep}
+            onSubmit={handleSubmit}
           />
         </div>
       </div>
-
-      {/* Form Content */}
-      <div className="bg-white rounded-lg shadow-sm border">
-        <form onSubmit={form.handleSubmit(handleSubmit)}>
-          {currentStep === 1 && (
-            <BasicInfoForm form={form} />
-          )}
-          
-          {currentStep === 2 && (
-            <OptionsForm form={form} />
-          )}
-          
-          {currentStep === 3 && (
-            <VariantsForm form={form} />
-          )}
-          
-          {currentStep === 4 && (
-            <MediaForm form={form} />
-          )}
-        </form>
-      </div>
-
-      {/* Action Bar */}
-      <ActionBar
-        currentStep={currentStep}
-        totalSteps={4}
-        isStepValid={isStepValid}
-        isLoading={isLoading}
-        onPrevious={previousStep}
-        onNext={nextStep}
-        onSubmit={handleSubmit}
-      />
     </div>
   );
 };

@@ -15,8 +15,8 @@ export const inventoryApi = {
    * GET /api/inventory/stores/locations
    */
   getStoreLocations: async () => {
-    const response = await api.get('/api/inventory/stores/locations');
-    return response.data;
+  const response = await api.get('/api/inventory/stores/locations');
+  return response.data?.data;
   },
 
   // ==============================================
@@ -28,11 +28,11 @@ export const inventoryApi = {
    * POST /api/inventory/products/:productId/stores/:storeId/inventory/assign
    */
   assignInventoryToStore: async (productId, storeId, inventoryData) => {
-    const response = await api.post(
+  const response = await api.post(
       `/api/inventory/products/${productId}/stores/${storeId}/inventory/assign`,
       inventoryData
     );
-    return response.data;
+  return response.data?.data;
   },
 
   /**
@@ -40,10 +40,10 @@ export const inventoryApi = {
    * POST /api/inventory/products/:productId/stores/:storeId/inventory/sync
    */
   syncInventoryFromShopify: async (productId, storeId) => {
-    const response = await api.post(
+  const response = await api.post(
       `/api/inventory/products/${productId}/stores/${storeId}/inventory/sync`
     );
-    return response.data;
+  return response.data?.data;
   },
 
   // ==============================================
@@ -56,11 +56,11 @@ export const inventoryApi = {
    */
   getInventorySummary: async (productId, storeId = null) => {
     const params = storeId ? { storeId } : {};
-    const response = await api.get(
+  const response = await api.get(
       `/api/inventory/products/${productId}/inventory/summary`,
       { params }
     );
-    return response.data;
+  return response.data?.data;
   },
 
   /**
@@ -68,11 +68,11 @@ export const inventoryApi = {
    * GET /api/inventory/products/:productId/stores/:storeId/inventory/history
    */
   getInventoryHistory: async (productId, storeId, options = {}) => {
-    const response = await api.get(
+  const response = await api.get(
       `/api/inventory/products/${productId}/stores/${storeId}/inventory/history`,
       { params: options }
     );
-    return response.data;
+  return response.data?.data;
   },
 
   // ==============================================
@@ -129,11 +129,11 @@ export const inventoryApi = {
    * POST /api/inventory/live-inventory
    */
   getLiveShopifyInventory: async (productId, locationIds = null) => {
-    const response = await api.post('/api/inventory/live-inventory', {
+  const response = await api.post('/api/inventory/live-inventory', {
       productId,
       locationIds
     });
-    return response.data;
+  return response.data?.data;
   },
 
   /**
@@ -141,11 +141,11 @@ export const inventoryApi = {
    * POST /api/inventory/allocation/recommendations
    */
   getInventoryAllocationRecommendations: async (productIds, allocationStrategy = 'balanced') => {
-    const response = await api.post('/api/inventory/allocation/recommendations', {
+  const response = await api.post('/api/inventory/allocation/recommendations', {
       productIds,
       allocationStrategy
     });
-    return response.data;
+  return response.data?.data;
   },
 
   /**
@@ -153,10 +153,10 @@ export const inventoryApi = {
    * POST /api/inventory/allocation/real-time
    */
   getRealTimeAllocationData: async (inventoryItemIds, locationIds = null) => {
-    const response = await api.post('/api/inventory/allocation/real-time', {
+  const response = await api.post('/api/inventory/allocation/real-time', {
       inventoryItemIds,
       locationIds
     });
-    return response.data;
+  return response.data?.data;
   }
 };

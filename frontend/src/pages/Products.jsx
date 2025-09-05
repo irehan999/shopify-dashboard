@@ -61,9 +61,9 @@ export default function Products() {
 
   // Filter products based on search and status
   const filteredProducts = useMemo(() => {
-    if (!productsResponse?.data?.products) return []
+    if (!productsResponse?.products) return []
     
-    let filtered = productsResponse.data.products
+    let filtered = productsResponse.products
 
     if (searchTerm) {
       const search = searchTerm.toLowerCase()
@@ -79,7 +79,7 @@ export default function Products() {
     }
 
     return filtered
-  }, [productsResponse?.data?.products, searchTerm, statusFilter])
+  }, [productsResponse?.products, searchTerm, statusFilter])
 
   // Handle product deletion
   const handleDeleteProduct = async (productId) => {
@@ -191,7 +191,7 @@ export default function Products() {
 
       {/* Products Table */}
       {!isLoading && !error && (
-        <div className="bg-white dark:bg-gray-900 shadow-sm rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden">
+  <div className="bg-white dark:bg-gray-900 shadow-sm rounded-lg border border-gray-200 dark:border-gray-800">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
               <thead className="bg-gray-50 dark:bg-gray-800">
@@ -218,7 +218,7 @@ export default function Products() {
               </thead>
               <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
                 {filteredProducts.map((product) => (
-                  <tr key={product.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                  <tr key={product._id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="h-12 w-12 flex-shrink-0">
@@ -302,19 +302,19 @@ export default function Products() {
                         }
                       >
                         <Dropdown.Item
-                          onClick={() => handleViewProduct(product.id)}
+                          onClick={() => handleViewProduct(product._id)}
                           icon={EyeIcon}
                         >
                           View Details
                         </Dropdown.Item>
                         <Dropdown.Item
-                          onClick={() => handleEditProduct(product.id)}
+                          onClick={() => handleEditProduct(product._id)}
                           icon={PencilIcon}
                         >
                           Edit Product
                         </Dropdown.Item>
                         <Dropdown.Item
-                          onClick={() => handlePushToStores(product.id)}
+                          onClick={() => handlePushToStores(product._id)}
                           icon={ArrowTopRightOnSquareIcon}
                         >
                           Push to Stores
@@ -374,7 +374,7 @@ export default function Products() {
             </Button>
             <Button
               variant="danger"
-              onClick={() => handleDeleteProduct(deleteConfirm.id)}
+              onClick={() => handleDeleteProduct(deleteConfirm._id)}
               loading={deleteProduct.isPending}
             >
               Delete Product

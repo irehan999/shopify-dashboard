@@ -135,13 +135,21 @@ export const productFormSchema = z.object({
   }).default({}),
   
   // Dashboard specific
-  category: z.string().max(255).optional(),
   notes: z.string().max(1000).optional(),
   
   // Product structure
   options: z.array(optionSchema).default([]),
   variants: z.array(variantSchema).default([]),
   media: z.array(mediaSchema).default([]),
+  
+  // Single variant product fields (used when no options)
+  price: z.number().min(0, 'Price must be positive').default(0),
+  sku: z.string().optional(),
+  inventoryQuantity: z.number().min(0).default(0),
+  compareAtPrice: z.number().min(0).optional(),
+  weight: z.number().min(0).optional(),
+  weightUnit: z.enum(['kg', 'g', 'lb', 'oz']).default('g'),
+  barcode: z.string().optional(),
   
   // Store sync settings (frontend only - not sent to product creation)
   storeMappings: storeMappingSchema.default({ syncToAll: false, selectedStoreIds: [] })
@@ -159,8 +167,10 @@ export const stepSchemas = {
     status: z.enum(['ACTIVE', 'DRAFT', 'ARCHIVED']).default('DRAFT'),
     published: z.boolean().default(false),
     publishDate: z.string().optional(),
-    category: z.string().max(255).optional(),
     notes: z.string().max(1000).optional(),
+    price: z.number().min(0, 'Price must be positive'),
+    sku: z.string().optional(),
+    inventoryQuantity: z.number().min(0).default(0),
     seo: z.object({
       title: z.string().max(60).optional(),
       description: z.string().max(160).optional()
@@ -177,10 +187,6 @@ export const stepSchemas = {
   
   media: z.object({
     media: z.array(mediaSchema).default([])
-  }),
-  
-  stores: z.object({
-    storeMappings: storeMappingSchema.default({ syncToAll: false, selectedStoreIds: [] })
   })
 };
 
@@ -202,11 +208,20 @@ export const defaultProductForm = {
     title: '',
     description: ''
   },
-  category: '',
   notes: '',
   options: [],
   variants: [],
   media: [],
+  
+  // Single variant product fields (used when no options)
+  price: 0,
+  sku: '',
+  inventoryQuantity: 0,
+  compareAtPrice: undefined,
+  weight: undefined,
+  weightUnit: 'g',
+  barcode: '',
+  
   storeMappings: {
     syncToAll: false,
     selectedStoreIds: [],
