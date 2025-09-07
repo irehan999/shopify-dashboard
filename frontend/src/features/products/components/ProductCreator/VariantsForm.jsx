@@ -363,15 +363,25 @@ export const VariantsForm = ({ form }) => {
                                 onChange={(e) => {
                                   const v = e.target.value;
                                   if (v === '' || v === undefined || v === null) {
-                                    field.onChange(undefined);
+                                    field.onChange('');
                                   } else {
                                     const num = Number(v);
-                                    field.onChange(Number.isFinite(num) ? num : undefined);
+                                    field.onChange(Number.isFinite(num) ? num : '');
                                   }
                                 }}
                                 onFocus={(e) => {
                                   // Select all text when focusing for easy editing
                                   e.target.select();
+                                }}
+                                onKeyDown={(e) => {
+                                  // Allow backspace, delete, arrow keys, etc.
+                                  if (['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.key)) {
+                                    return;
+                                  }
+                                  // Allow numbers, decimal point, and minus sign
+                                  if (!/[\d.-]/.test(e.key) && !e.ctrlKey && !e.metaKey) {
+                                    e.preventDefault();
+                                  }
                                 }}
                                 className={classNames(
                                   "block w-full pl-7 pr-3 py-2 rounded-md border transition-all duration-200 text-sm",
@@ -406,15 +416,25 @@ export const VariantsForm = ({ form }) => {
                                 onChange={(e) => {
                                   const v = e.target.value;
                                   if (v === '' || v === undefined || v === null) {
-                                    field.onChange(undefined);
+                                    field.onChange('');
                                   } else {
                                     const num = Number(v);
-                                    field.onChange(Number.isFinite(num) ? num : undefined);
+                                    field.onChange(Number.isFinite(num) ? num : '');
                                   }
                                 }}
                                 onFocus={(e) => {
                                   // Select all text when focusing for easy editing
                                   e.target.select();
+                                }}
+                                onKeyDown={(e) => {
+                                  // Allow backspace, delete, arrow keys, etc.
+                                  if (['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.key)) {
+                                    return;
+                                  }
+                                  // Allow numbers, decimal point, and minus sign
+                                  if (!/[\d.-]/.test(e.key) && !e.ctrlKey && !e.metaKey) {
+                                    e.preventDefault();
+                                  }
                                 }}
                                 className={classNames(
                                   "block w-full pl-7 pr-3 py-2 rounded-md border transition-all duration-200 text-sm",
@@ -506,15 +526,25 @@ export const VariantsForm = ({ form }) => {
                               onChange={(e) => {
                                 const v = e.target.value;
                                 if (v === '' || v === undefined || v === null) {
-                                  field.onChange(undefined);
+                                  field.onChange('');
                                 } else {
                                   const num = parseInt(v, 10);
-                                  field.onChange(Number.isFinite(num) ? num : undefined);
+                                  field.onChange(Number.isFinite(num) ? num : '');
                                 }
                               }}
                               onFocus={(e) => {
                                 // Select all text when focusing for easy editing
                                 e.target.select();
+                              }}
+                              onKeyDown={(e) => {
+                                // Allow backspace, delete, arrow keys, etc.
+                                if (['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.key)) {
+                                  return;
+                                }
+                                // Allow only numbers
+                                if (!/[\d]/.test(e.key) && !e.ctrlKey && !e.metaKey) {
+                                  e.preventDefault();
+                                }
                               }}
                               className={classNames(
                                 "block w-full px-3 py-2 rounded-md border transition-all duration-200 text-sm",

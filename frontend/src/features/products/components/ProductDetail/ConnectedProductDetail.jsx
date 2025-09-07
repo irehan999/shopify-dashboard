@@ -27,8 +27,9 @@ export const ConnectedProductDetail = ({ product, onEdit, onPushToStores }) => {
   const [selectedStoreForSync, setSelectedStoreForSync] = useState(null);
   
   // Only fetch inventory if product has store mappings
+  const productId = product.id || product._id;
   const { data: inventorySummary, isLoading: inventoryLoading } = useInventorySummary(
-    product.id,
+    productId,
     { enabled: product.isConnected }
   );
   
@@ -45,7 +46,7 @@ export const ConnectedProductDetail = ({ product, onEdit, onPushToStores }) => {
     try {
       setSelectedStoreForSync(storeId);
       await syncToStore.mutateAsync({
-        productId: product.id,
+        productId: productId,
         storeId,
         forceSync: true
       });

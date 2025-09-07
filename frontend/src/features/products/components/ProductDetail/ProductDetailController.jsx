@@ -15,11 +15,13 @@ export const ProductDetailController = ({ product }) => {
   const navigate = useNavigate();
 
   const handleEdit = () => {
-    navigate(`/products/${product.id}/edit`);
+    const productId = product.id || product._id;
+    navigate(`/products/${productId}/edit`);
   };
 
   const handlePushToStores = () => {
-    navigate(`/products/${product.id}/push`);
+    const productId = product.id || product._id;
+    navigate(`/products/${productId}/push`);
   };
 
   // Determine which component to render based on store connections
