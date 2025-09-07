@@ -307,7 +307,7 @@ productSchema.methods.toShopifyProductInput = function() {
 }
 
 // Convert to ProductSetInput for productSet mutation (upsert)
-productSchema.methods.toShopifyProductSetInput = function(locationId = null, collectionsToJoin = []) {
+productSchema.methods.toShopifyProductSetInput = function(locationId = null, collectionsToJoin = [], variantOverrides = {}) {
   const input = {
     title: this.title,
     handle: this.handle || this.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -322,13 +322,9 @@ productSchema.methods.toShopifyProductSetInput = function(locationId = null, col
   if (typeof this.published === 'boolean') input.published = this.published
   if (this.publishDate) input.publishDate = this.publishDate.toISOString()
   
-  // For productSet, use collections field instead of collectionsToJoin
-  // Priority: 1. Dynamic collections from frontend, 2. Product's stored collections
-  if (collectionsToJoin.length > 0) {
-    input.collections = collectionsToJoin;
-  } else if (this.collectionsToJoin?.length) {
-    input.collections = this.collectionsToJoin;
-  }
+  // IMPORTANT: As per current requirements, do NOT include collections in productSet input.
+  // Collections will be handled via separate mutations after product creation.
+  // TODO(Future): Re-enable collections field if workflow requires direct assignment via productSet.
   
   if (this.giftCard) input.giftCard = this.giftCard
   if (this.giftCardTemplateSuffix) input.giftCardTemplateSuffix = this.giftCardTemplateSuffix
@@ -353,27 +349,38 @@ productSchema.methods.toShopifyProductSetInput = function(locationId = null, col
   
   // Add variants for productSet
   if (this.variants?.length) {
-    input.variants = this.variants.map(variant => {
+    input.variants = this.variants.map((variant, vIndex) => {
+      const override = variantOverrides?.[vIndex] || {};
       const variantInput = {
-        price: variant.price.toString() // Shopify expects string
+        price: (override.price ?? variant.price).toString() // Shopify expects string
       }
       
       // Add optional variant fields
-      if (variant.compareAtPrice) variantInput.compareAtPrice = variant.compareAtPrice.toString()
-      if (variant.sku) variantInput.sku = variant.sku
+      if (override.compareAtPrice != null) {
+        variantInput.compareAtPrice = override.compareAtPrice.toString()
+      } else if (variant.compareAtPrice) {
+        variantInput.compareAtPrice = variant.compareAtPrice.toString()
+      }
+      if (override.sku) {
+        variantInput.sku = override.sku
+      } else if (variant.sku) {
+        variantInput.sku = variant.sku
+      }
       if (variant.barcode) variantInput.barcode = variant.barcode
       if (variant.taxCode) variantInput.taxCode = variant.taxCode
       if (typeof variant.taxable === 'boolean') variantInput.taxable = variant.taxable
       if (typeof variant.requiresShipping === 'boolean') variantInput.requiresShipping = variant.requiresShipping
       
-      // Inventory settings - for productSet use inventoryQuantities with proper location
-      if (variant.inventoryPolicy) variantInput.inventoryPolicy = variant.inventoryPolicy.toUpperCase()
-      if (typeof variant.inventoryQuantity === 'number' && locationId) {
-        variantInput.inventoryQuantities = [{
-          availableQuantity: variant.inventoryQuantity,
-          locationId: locationId
-        }]
-      }
+  // Inventory settings
+  if (variant.inventoryPolicy) variantInput.inventoryPolicy = variant.inventoryPolicy.toUpperCase()
+  // Per current requirements, do NOT pass inventoryQuantities when we don't have permissions/location.
+  // We'll manage inventory via dedicated inventory mutations later.
+  // if (typeof variant.inventoryQuantity === 'number' && locationId) {
+  //   variantInput.inventoryQuantities = [{
+  //     availableQuantity: variant.inventoryQuantity,
+  //     locationId: locationId
+  //   }]
+  // }
       
       // Weight
       if (variant.weight) {
@@ -388,7 +395,7 @@ productSchema.methods.toShopifyProductSetInput = function(locationId = null, col
       }
       
       // Option values for new product model
-      if (variant.optionValues?.length) {
+  if (variant.optionValues?.length) {
         variantInput.optionValues = variant.optionValues.map(opt => ({
           optionName: opt.optionName,
           name: opt.name

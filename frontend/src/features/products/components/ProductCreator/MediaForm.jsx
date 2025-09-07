@@ -154,12 +154,12 @@ export const MediaForm = ({ form }) => {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-medium text-gray-900 mb-4">
+        <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-1">
           Product Media
         </h2>
-        <p className="text-sm text-gray-600 mb-6">
+        <p className="text-xs text-gray-600 dark:text-gray-400 mb-4">
           Upload images and videos for your product. First image will be the main product image in Shopify.
         </p>
       </div>
@@ -181,14 +181,14 @@ export const MediaForm = ({ form }) => {
           {isUploading ? (
             <div className="flex flex-col items-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-3"></div>
-              <p className="text-sm text-gray-600">Processing files...</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Processing files...</p>
             </div>
           ) : watchedMedia.length >= 10 ? (
             <div className="flex flex-col items-center">
               <svg className="h-12 w-12 text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L18.364 5.636M5.636 18.364l12.728-12.728" />
               </svg>
-              <p className="text-sm font-medium text-gray-500">Maximum 10 files reached</p>
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Maximum 10 files reached</p>
               <p className="text-xs text-gray-400">Remove some files to upload more</p>
             </div>
           ) : (
@@ -196,10 +196,10 @@ export const MediaForm = ({ form }) => {
               <svg className="h-12 w-12 text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
-              <p className="text-sm font-medium text-gray-700 mb-1">
+              <p className="text-sm font-medium text-gray-700 dark:text-white mb-1">
                 {isDragActive ? 'Drop files here' : 'Drag & drop media files'}
               </p>
-              <p className="text-xs text-gray-500 mb-3">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
                 or click to browse (max 10 files, 10MB each)
               </p>
               <p className="text-xs text-gray-400">
@@ -211,7 +211,7 @@ export const MediaForm = ({ form }) => {
 
         {/* Upload progress or file count */}
         {watchedMedia.length > 0 && (
-          <div className="text-xs text-gray-600 text-center">
+          <div className="text-xs text-gray-600 dark:text-gray-400 text-center">
             {watchedMedia.length} of 10 files uploaded
           </div>
         )}
@@ -220,7 +220,7 @@ export const MediaForm = ({ form }) => {
       {/* Media List */}
       {watchedMedia.length > 0 ? (
         <div className="space-y-4">
-          <h3 className="text-sm font-medium text-gray-900">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-white">
             Uploaded Media ({watchedMedia.length})
           </h3>
           

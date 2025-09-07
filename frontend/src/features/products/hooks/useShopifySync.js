@@ -126,8 +126,8 @@ export const useSyncToMultipleStores = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ productId, storeIds, syncOptions }) => 
-      shopifySyncApi.syncToMultipleStores(productId, storeIds, syncOptions),
+    mutationFn: ({ productId, storesWithOptions }) => 
+      shopifySyncApi.syncToMultipleStores(productId, storesWithOptions),
     onSuccess: (results, variables) => {
       queryClient.invalidateQueries({ queryKey: ['sync-status'] });
       queryClient.invalidateQueries({ 
@@ -137,8 +137,8 @@ export const useSyncToMultipleStores = () => {
         queryKey: ['inventory', 'summary', variables.productId] 
       });
       
-      const successCount = results.filter(r => r.status === 'fulfilled').length;
-      const failedCount = results.filter(r => r.status === 'rejected').length;
+  const successCount = results.filter(r => r.status === 'fulfilled').length;
+  const failedCount = results.filter(r => r.status === 'rejected').length;
       
       toast.success(`Product synced to ${successCount} stores successfully!`);
       if (failedCount > 0) {

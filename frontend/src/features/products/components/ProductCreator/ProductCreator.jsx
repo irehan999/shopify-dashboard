@@ -42,15 +42,55 @@ export const ProductCreator = ({ onSuccess, initialData }) => {
       // Remove store mappings - we only create product in database
       const { storeMappings, ...productData } = formData;
       
-      // If no options, create single variant with product-level data
+      // CRITICAL: Follow backend logic exactly
+      // Case 1: Single variant product (no options)
       if (!productData.options || productData.options.length === 0) {
-        productData.variants = [{
-          price: productData.price || 0,
-          sku: productData.sku || '',
-          inventoryQuantity: productData.inventoryQuantity || 0,
-          optionValues: [],
-          mediaIds: []
-        }];
+        // Ensure price is provided for single variant creation
+        if (!productData.price || productData.price <= 0) {
+          toast.error('Price is required for product creation');
+          return;
+        }
+        
+        // Send empty variants array - backend will create default variant from product-level price data
+        productData.variants = [];
+        
+        // Backend expects these product-level fields for single variant:
+        // price, sku, inventoryQuantity, compareAtPrice, weight, weightUnit, barcode
+        // These are already in productData from BasicInfoForm
+      } 
+      // Case 2: Multi-variant product (has options)
+      else {
+        // Validate that variants were generated
+        if (!productData.variants || productData.variants.length === 0) {
+          toast.error('Please generate variants from your options or add at least one variant');
+          return;
+        }
+        
+        // Validate option values consistency
+        const optionNames = productData.options.map(opt => opt.name);
+        for (const variant of productData.variants) {
+          if (variant.optionValues) {
+            for (const optValue of variant.optionValues) {
+              if (!optionNames.includes(optValue.optionName)) {
+                toast.error(`Invalid option configuration. Please regenerate variants.`);
+                return;
+              }
+            }
+          }
+        }
+      }
+      
+      // Clean up empty/undefined fields to avoid backend issues
+      Object.keys(productData).forEach(key => {
+        if (productData[key] === '' || productData[key] === undefined) {
+          delete productData[key];
+        }
+      });
+      
+      // Ensure required fields
+      if (!productData.title?.trim()) {
+        toast.error('Product title is required');
+        return;
       }
       
       console.log('Final product data:', productData);
@@ -67,6 +107,9 @@ export const ProductCreator = ({ onSuccess, initialData }) => {
         const newId = created?._id || created?.id;
         if (newId) {
           navigate(`/products/${newId}`);
+        } else {
+          // Fallback to products list if no ID
+          navigate('/products');
         }
       }
       

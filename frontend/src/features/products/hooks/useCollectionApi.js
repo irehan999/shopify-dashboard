@@ -21,6 +21,9 @@ export const useStoreCollections = (storeId, options = {}) => {
   });
 };
 
+// Alias for compatibility
+export const useCollectionsByStore = useStoreCollections;
+
 export const useCollectionDetails = (storeId, collectionId) => {
   return useQuery({
     queryKey: ['collections', storeId, collectionId],

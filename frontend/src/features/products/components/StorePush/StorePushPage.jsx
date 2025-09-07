@@ -1,39 +1,28 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   useSyncToMultipleStores
 } from '../../hooks/useShopifySync.js';
-import { useCollectionSelection } from '../../hooks/useCollectionApi.js';
-import { useLocationSelection } from '../../hooks/useInventoryApi.js';
 import { useConnectedStores } from '@/features/shopify/hooks/useShopify.js';
-import { useLiveShopifyInventory } from '../../hooks/useInventoryApi.js';
-import LiveInventoryAllocationDashboard from '../LiveInventoryAllocationDashboard.jsx';
 import { StoreSelector } from './StoreSelector.jsx';
-import { CollectionSelector } from './CollectionSelector.jsx';
 import { PushProgress } from './PushProgress.jsx';
 import { Button } from '@/components/ui/Button.jsx';
 import { Card } from '@/components/ui/Card.jsx';
-import { Switch } from '@/components/ui/Switch.jsx';
-import { Select } from '@/components/ui/Select.jsx';
-import { ArrowLeftIcon, CogIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 
 export const StorePushPage = ({ product }) => {
   const navigate = useNavigate();
   const [selectedStores, setSelectedStores] = useState([]);
-  const [selectedCollections, setSelectedCollections] = useState({});
-  const [selectedLocations, setSelectedLocations] = useState({});
-  const [variantInventory, setVariantInventory] = useState({}); // Store-specific variant inventory
+  // Variant-level overrides and inventory assignment
+  const [variantOverrides, setVariantOverrides] = useState({}); // { [variantIndex]: { price?, compareAtPrice?, sku? } }
+  const [assignedInventory, setAssignedInventory] = useState({}); // { [variantIndex]: number }
   const [syncProgress, setSyncProgress] = useState(null);
-  const [isAdvancedMode, setIsAdvancedMode] = useState(false);
-  const [enableCollections, setEnableCollections] = useState(true);
-  const [enableInventory, setEnableInventory] = useState(false);
-  const [showLiveAllocation, setShowLiveAllocation] = useState(false);
 
   const { data: stores = [], isLoading: storesLoading } = useConnectedStores();
-  const { locations, locationOptions } = useLocationSelection();
-  const { data: liveInventory } = useLiveShopifyInventory(product?.id);
   const syncToMultipleStores = useSyncToMultipleStores();
+
+  const variants = useMemo(() => product?.variants || [], [product]);
 
   const handlePushToStores = async () => {
     if (selectedStores.length === 0) {
@@ -49,23 +38,23 @@ export const StorePushPage = ({ product }) => {
         status: 'syncing'
       });
 
-      // Prepare sync options with collections and inventory
-      const syncOptions = {
-        forceSync: true,
-        ...(enableCollections && {
-          collectionsToJoin: selectedCollections
-        }),
-        ...(enableInventory && {
-          locationId: selectedLocations,
-          inventoryData: variantInventory // Include variant-specific inventory
-        })
-      };
+    // Build per-store payloads expected by API helper (storeId + options)
+      const storesWithOptions = selectedStores.map(storeId => ({
+        storeId,
+        options: {
+      forceSync: true,
+      // New contract: send variant overrides and assigned inventory; no collections/locations here
+      variantOverrides,
+      assignedInventory
+        }
+      }));
 
-      // Use enhanced syncToMultipleStores with new options
+      // Debug payload
+      console.debug('StorePush Debug (frontend): storesWithOptions ->', storesWithOptions);
+      // Use multi-store sync with corrected payload
       const results = await syncToMultipleStores.mutateAsync({
         productId: product.id,
-        storeIds: selectedStores,
-        syncOptions
+        storesWithOptions
       });
 
       setSyncProgress(prev => ({
@@ -108,26 +97,22 @@ export const StorePushPage = ({ product }) => {
         status: 'syncing'
       });
 
-      // Get all store IDs
-      const allStoreIds = stores.map(store => store.id);
-      
-      // Prepare sync options
-      const syncOptions = {
-        forceSync: true,
-        ...(enableCollections && Object.keys(selectedCollections).length > 0 && {
-          collectionsToJoin: selectedCollections
-        }),
-        ...(enableInventory && Object.keys(selectedLocations).length > 0 && {
-          locationId: selectedLocations,
-          inventoryData: variantInventory
-        })
-      };
+      // Get all store IDs using MongoDB _id
+  const allStoreIds = stores.map(store => store._id);
 
-      // Use enhanced syncToMultipleStores
+    // Build per-store payloads and apply current overrides/inventory
+      const storesWithOptions = allStoreIds.map(storeId => ({
+        storeId,
+        options: {
+      forceSync: true,
+      variantOverrides,
+      assignedInventory
+        }
+      }));
+
       const results = await syncToMultipleStores.mutateAsync({
         productId: product.id,
-        storeIds: allStoreIds,
-        syncOptions
+        storesWithOptions
       });
 
       setSyncProgress(prev => ({
@@ -163,44 +148,37 @@ export const StorePushPage = ({ product }) => {
 
   const handleStoreSelection = (storeIds) => {
     setSelectedStores(storeIds);
-    // Reset collections, locations, and inventory when stores change
-    setSelectedCollections({});
-    setSelectedLocations({});
-    setVariantInventory({});
+    // Reset inputs when stores change
+    setVariantOverrides({});
+    setAssignedInventory({});
   };
 
-  const handleCollectionSelection = (storeId, collectionIds) => {
-    setSelectedCollections(prev => ({
+  // Handlers for inputs
+  const handleOverrideChange = (variantIndex, field, value) => {
+    setVariantOverrides(prev => ({
       ...prev,
-      [storeId]: collectionIds
-    }));
-  };
-
-  const handleLocationSelection = (storeId, locationId) => {
-    setSelectedLocations(prev => ({
-      ...prev,
-      [storeId]: locationId
-    }));
-  };
-
-  const handleInventoryChange = (storeId, variantIndex, quantity) => {
-    setVariantInventory(prev => ({
-      ...prev,
-      [storeId]: {
-        ...prev[storeId],
-        [variantIndex]: parseInt(quantity) || 0
+      [variantIndex]: {
+        ...(prev[variantIndex] || {}),
+        [field]: value
       }
     }));
   };
 
+  const handleAssignedQtyChange = (variantIndex, value) => {
+    const qty = Number.isNaN(parseInt(value, 10)) ? 0 : parseInt(value, 10);
+    setAssignedInventory(prev => ({
+      ...prev,
+      [variantIndex]: qty
+    }));
+  };
+
   const isLoading = syncToMultipleStores.isPending;
-  const hasSelectedCollections = enableCollections && Object.keys(selectedCollections).length > 0;
-  const hasSelectedLocations = enableInventory && Object.keys(selectedLocations).length > 0;
-  const hasInventoryAssignments = enableInventory && Object.keys(variantInventory).length > 0;
+  const hasInventoryAssignments = Object.keys(assignedInventory).length > 0;
+  const hasOverrides = Object.keys(variantOverrides).length > 0;
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
-      {/* Header */}
+  {/* Header */}
       <div className="flex items-center space-x-4">
         <Button
           variant="ghost"
@@ -258,89 +236,70 @@ export const StorePushPage = ({ product }) => {
       ) : (
         /* Show store selection and configuration */
         <div className="space-y-6">
-          {/* Sync Configuration */}
-          <Card className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-medium text-gray-900">
-                Sync Configuration
-              </h2>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsAdvancedMode(!isAdvancedMode)}
-              >
-                <CogIcon className="h-4 w-4 mr-2" />
-                {isAdvancedMode ? 'Simple Mode' : 'Advanced Options'}
-              </Button>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <label className="text-sm font-medium text-gray-900">
-                    Add to Collections
-                  </label>
-                  <p className="text-xs text-gray-500">
-                    Assign product to specific collections in each store
-                  </p>
-                </div>
-                <Switch
-                  checked={enableCollections}
-                  onChange={setEnableCollections}
-                />
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <div>
-                  <label className="text-sm font-medium text-gray-900">
-                    Manage Inventory
-                  </label>
-                  <p className="text-xs text-gray-500">
-                    Set inventory locations for each store
-                  </p>
-                </div>
-                <Switch
-                  checked={enableInventory}
-                  onChange={setEnableInventory}
-                />
-              </div>
-              
-              {/* Live Allocation Option */}
-              {enableInventory && (
-                <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                  <div>
-                    <label className="text-sm font-medium text-gray-900">
-                      Use Live Allocation
-                    </label>
-                    <p className="text-xs text-gray-500">
-                      Real-time Shopify inventory allocation
-                    </p>
-                  </div>
-                  <Switch
-                    checked={showLiveAllocation}
-                    onChange={setShowLiveAllocation}
-                  />
-                </div>
-              )}
-            </div>
-          </Card>
-
-          {/* Live Allocation Dashboard */}
-          {enableInventory && showLiveAllocation && (
+          {/* Variant Overrides and Inventory */}
+          {selectedStores.length > 0 && (
             <Card className="p-6">
               <h2 className="text-lg font-medium text-gray-900 mb-4">
-                Live Inventory Allocation
+                Variant Overrides and Inventory
               </h2>
-              <LiveInventoryAllocationDashboard
-                productId={product?.id}
-                onAllocationChange={(variantId, allocation) => {
-                  // Handle live allocation changes
-                  console.log('Live allocation changed:', variantId, allocation);
-                  toast.success('Live allocation updated!');
-                }}
-                showRecommendations={true}
-                compactMode={true}
-              />
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-gray-600">
+                      <th className="px-3 py-2">Variant</th>
+                      <th className="px-3 py-2">Current Price</th>
+                      <th className="px-3 py-2">Override Price</th>
+                      <th className="px-3 py-2">Override Compare-at</th>
+                      <th className="px-3 py-2">Assign Qty</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {variants.map((v, idx) => (
+                      <tr key={idx} className="border-t border-gray-100">
+                        <td className="px-3 py-2 text-gray-900">
+                          {v.title || v.optionValues?.map(ov => ov.name).join(' / ') || `Variant #${idx+1}`}
+                        </td>
+                        <td className="px-3 py-2 text-gray-700">
+                          {v.price}
+                          {v.compareAtPrice ? (
+                            <span className="text-xs text-gray-400 ml-2">(comp {v.compareAtPrice})</span>
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            type="number"
+                            step="0.01"
+                            className="w-28 border rounded px-2 py-1"
+                            placeholder="e.g. 19.99"
+                            value={variantOverrides[idx]?.price ?? ''}
+                            onChange={e => handleOverrideChange(idx, 'price', e.target.value)}
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            type="number"
+                            step="0.01"
+                            className="w-28 border rounded px-2 py-1"
+                            placeholder="e.g. 24.99"
+                            value={variantOverrides[idx]?.compareAtPrice ?? ''}
+                            onChange={e => handleOverrideChange(idx, 'compareAtPrice', e.target.value)}
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            type="number"
+                            className="w-24 border rounded px-2 py-1"
+                            placeholder="0"
+                            value={assignedInventory[idx] ?? ''}
+                            onChange={e => handleAssignedQtyChange(idx, e.target.value)}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-xs text-gray-500 mt-3">Overrides and assigned quantities will be applied to all selected stores.</p>
             </Card>
           )}
 
@@ -358,8 +317,7 @@ export const StorePushPage = ({ product }) => {
                 Push to All Stores ({stores.length})
               </Button>
               <div className="text-sm text-gray-500 flex items-center">
-                {hasSelectedCollections && <span className="mr-2">📁 Collections</span>}
-                {hasSelectedLocations && <span className="mr-2">📍 Locations</span>}
+                {hasOverrides && <span className="mr-2">✏️ Overrides</span>}
                 {hasInventoryAssignments && <span>📦 Inventory</span>}
               </div>
             </div>
@@ -374,110 +332,7 @@ export const StorePushPage = ({ product }) => {
             advanced={isAdvancedMode}
           />
 
-          {/* Collection and Location Configuration per Store */}
-          {selectedStores.length > 0 && (enableCollections || enableInventory) && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900">
-                Store Configuration
-              </h3>
-              
-              {selectedStores.map(storeId => {
-                const store = stores.find(s => s.id === storeId);
-                return (
-                  <Card key={storeId} className="p-6">
-                    <h4 className="font-medium text-gray-900 mb-4">
-                      {store?.name || store?.displayName}
-                    </h4>
-                    
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      {/* Collection Selection */}
-                      {enableCollections && (
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Collections
-                          </label>
-                          <CollectionSelector
-                            storeId={storeId}
-                            selectedCollections={selectedCollections[storeId] || []}
-                            onSelectionChange={(collectionIds) => 
-                              handleCollectionSelection(storeId, collectionIds)
-                            }
-                            compact={true}
-                          />
-                        </div>
-                      )}
-                      
-                      {/* Location Selection */}
-                      {enableInventory && (
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Inventory Location
-                          </label>
-                          <Select
-                            options={locationOptions}
-                            value={selectedLocations[storeId] || ''}
-                            onChange={(locationId) => handleLocationSelection(storeId, locationId)}
-                            placeholder="Select inventory location..."
-                            className="w-full"
-                          />
-                        </div>
-                      )}
-                      {/* Inventory Assignment */}
-                      {enableInventory && selectedLocations[storeId] && (
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Inventory Assignment
-                          </label>
-                          <div className="space-y-2">
-                            {product.variants?.map((variant, variantIndex) => (
-                              <div key={variantIndex} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                                <div className="flex-1">
-                                  <span className="text-sm font-medium">
-                                    {variant.sku || `Variant ${variantIndex + 1}`}
-                                  </span>
-                                  <div className="text-xs text-gray-500">
-                                    Master: {variant.inventoryQuantity || 0} units
-                                  </div>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    max={variant.inventoryQuantity || 0}
-                                    value={variantInventory[storeId]?.[variantIndex] || ''}
-                                    onChange={(e) => handleInventoryChange(storeId, variantIndex, e.target.value)}
-                                    placeholder="0"
-                                    className="w-16 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
-                                  />
-                                  <span className="text-xs text-gray-500">units</span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Collection Selection (Legacy - for stores without individual config) */}
-          {selectedStores.length > 0 && enableCollections && !isAdvancedMode && (
-            <div className="space-y-4">
-              {selectedStores.map(storeId => (
-                <CollectionSelector
-                  key={storeId}
-                  storeId={storeId}
-                  selectedCollections={selectedCollections[storeId] || []}
-                  onSelectionChange={(collectionIds) => 
-                    handleCollectionSelection(storeId, collectionIds)
-                  }
-                />
-              ))}
-            </div>
-          )}
+          {/* No collections or location configuration in this flow */}
 
           {/* Push Button */}
           {selectedStores.length > 0 && (
@@ -489,14 +344,11 @@ export const StorePushPage = ({ product }) => {
                   </h3>
                   <div className="text-sm text-gray-600 space-y-1">
                     <p>Product will be pushed to {selectedStores.length} selected stores</p>
-                    {hasSelectedCollections && (
-                      <p>• Will be added to selected collections</p>
-                    )}
-                    {hasSelectedLocations && (
-                      <p>• Inventory will be managed at selected locations</p>
-                    )}
                     {hasInventoryAssignments && (
                       <p>• Inventory quantities will be assigned as specified</p>
+                    )}
+                    {hasOverrides && (
+                      <p>• Variant overrides will be applied where provided</p>
                     )}
                   </div>
                 </div>

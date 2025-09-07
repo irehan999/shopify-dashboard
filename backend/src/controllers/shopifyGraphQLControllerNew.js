@@ -264,12 +264,19 @@ export const executeSyncProduct = asyncHandler(async (req, res) => {
   const { productId, storeId } = req.params;
   const { 
     forceSync = false, 
-    collectionsToJoin = [], 
-    inventoryData = {},
-    locationId 
+  variantOverrides = {}, // { [variantIndex]: { price?, compareAtPrice?, sku? } }
+  assignedInventory = {} // { [variantIndex]: number }
   } = req.body;
 
   try {
+    // Debug input for StorePush
+    console.log('StorePush Debug: executeSyncProduct payload ->', {
+      productId,
+      storeId,
+      forceSync,
+      hasVariantOverrides: !!variantOverrides && Object.keys(variantOverrides).length > 0,
+      hasAssignedInventory: !!assignedInventory && Object.keys(assignedInventory).length > 0
+    });
     // Get product with all relations
     const product = await Product.findById(productId)
       .populate('variants')
@@ -294,11 +301,14 @@ export const executeSyncProduct = asyncHandler(async (req, res) => {
     let result;
     let operation;
 
-    // Get primary location ID for inventory management if not provided
-    const targetLocationId = locationId || await getPrimaryLocationId(session);
+  // Inventory/location: keep simple for now; do not require location.
+  const targetLocationId = null; // TODO: Re-enable location resolution when permissions are granted
 
-    // Use productSet mutation for upsert functionality (Shopify recommended approach)
-    const productSetInput = product.toShopifyProductSetInput(targetLocationId, collectionsToJoin);
+  // Use productSet mutation for upsert functionality (Shopify recommended approach)
+  // Merge variant overrides into the productSet input
+  const productSetInput = product.toShopifyProductSetInput(targetLocationId, [], variantOverrides);
+  // Debug: show the exact ProductSetInput we will send
+  console.log('StorePush Debug: productSetInput ->', JSON.stringify(productSetInput, null, 2));
     result = await syncProduct(session, productSetInput);
     
     // Determine operation based on whether mapping existed
@@ -319,16 +329,21 @@ export const executeSyncProduct = asyncHandler(async (req, res) => {
         if (result.product.variants) {
           result.product.variants.edges.forEach((variantEdge, index) => {
             const variant = variantEdge.node;
-            mapping.updateVariantMapping(storeId, index, variant.id);
-            
+            const override = variantOverrides?.[index] || {};
+            mapping.updateVariantMapping(storeId, index, variant.id, {
+              ...(override.price ? { customPrice: Number(override.price) } : {}),
+              ...(override.compareAtPrice ? { customCompareAtPrice: Number(override.compareAtPrice) } : {})
+            });
+
             // Assign inventory if provided
-            if (inventoryData[index] && inventoryData[index].assignedQuantity) {
+            const qty = assignedInventory?.[index];
+            if (typeof qty === 'number' && qty >= 0) {
               mapping.assignInventoryToStore(
-                storeId, 
-                index, 
-                inventoryData[index].assignedQuantity,
-                targetLocationId,
-                req.user?.id // Assuming user is in request
+                storeId,
+                index,
+                qty,
+                null,
+                req.user?.id
               );
             }
           });
@@ -376,31 +391,30 @@ export const executeSyncProduct = asyncHandler(async (req, res) => {
       if (result.product.variants) {
         result.product.variants.edges.forEach((variantEdge, index) => {
           const variant = variantEdge.node;
+          const override = variantOverrides?.[index] || {};
+          const qty = assignedInventory?.[index];
           mapping.storeMappings[0].variantMappings.push({
             dashboardVariantIndex: index,
             shopifyVariantId: variant.id,
             isActive: true,
+            ...(override.price ? { customPrice: Number(override.price) } : {}),
+            ...(override.compareAtPrice ? { customCompareAtPrice: Number(override.compareAtPrice) } : {}),
             inventoryTracking: {
-              assignedQuantity: inventoryData[index]?.assignedQuantity || 0,
-              assignedAt: inventoryData[index]?.assignedQuantity ? new Date() : null,
-              assignedBy: inventoryData[index]?.assignedQuantity ? req.user?.id : null,
+              assignedQuantity: typeof qty === 'number' ? qty : 0,
+              assignedAt: typeof qty === 'number' ? new Date() : null,
+              assignedBy: typeof qty === 'number' ? req.user?.id : null,
               lastKnownShopifyQuantity: 0,
               inventoryPolicy: 'deny',
               trackQuantity: true,
-              locationInventory: targetLocationId ? [{
-                locationId: targetLocationId,
-                assignedQuantity: inventoryData[index]?.assignedQuantity || 0,
-                lastKnownQuantity: 0,
-                lastSyncAt: new Date()
-              }] : [],
-              inventoryHistory: inventoryData[index]?.assignedQuantity ? [{
+              locationInventory: [],
+              inventoryHistory: typeof qty === 'number' ? [{
                 action: 'assigned',
-                quantity: inventoryData[index].assignedQuantity,
+                quantity: qty,
                 previousQuantity: 0,
                 reason: 'Initial assignment during sync',
                 timestamp: new Date(),
                 syncedBy: req.user?.id,
-                locationId: targetLocationId
+                locationId: null
               }] : []
             }
           });
@@ -423,16 +437,12 @@ export const executeSyncProduct = asyncHandler(async (req, res) => {
         storeId: storeId,
         handle: result.product.handle
       },
-      collections: {
-        requested: collectionsToJoin,
-        synced: collectionsToJoin.length
-      },
       inventory: inventorySummary,
       executionTime: new Date()
     };
 
     res.status(200).json(
-      new ApiResponse(200, response, `Product successfully ${operation} in Shopify with collections and inventory`)
+  new ApiResponse(200, response, `Product successfully ${operation} in Shopify with overrides and inventory assignment stored`)
     );
 
   } catch (error) {
@@ -801,5 +811,89 @@ export const executeBulkSync = asyncHandler(async (req, res) => {
   res.status(200).json(
     new ApiResponse(200, response, `Bulk sync completed: ${results.length} successful, ${errors.length} failed`)
   );
+});
+
+/**
+ * Get Product Sync Status Across All Stores
+ * Returns sync status for a product in all connected stores
+ */
+export const getProductSyncStatus = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
+
+  try {
+    // Get the product to verify it exists
+    const product = await Product.findById(productId);
+    if (!product) {
+      throw new ApiError(404, 'Product not found');
+    }
+
+    // Get all user's active stores
+    const stores = await Store.find({
+      userId: req.user._id,
+      isActive: true
+    });
+
+    // Get all ProductMap entries for this product
+    const productMappings = await ProductMap.find({
+      dashboardProduct: productId
+    }).populate('storeMappings.store');
+
+    // Build sync status for each store
+    const syncStatuses = stores.map(store => {
+      const mapping = productMappings.find(pm => 
+        pm.storeMappings.some(sm => sm.store._id.toString() === store._id.toString())
+      );
+
+      if (!mapping) {
+        return {
+          storeId: store._id,
+          storeName: store.shopName,
+          shopDomain: store.shopDomain,
+          isSynced: false,
+          syncStatus: 'not_synced',
+          lastSyncAt: null,
+          shopifyProductId: null,
+          variantCount: 0
+        };
+      }
+
+      const storeMapping = mapping.getStoreMapping(store._id);
+      
+      return {
+        storeId: store._id,
+        storeName: store.shopName,
+        shopDomain: store.shopDomain,
+        isSynced: true,
+        syncStatus: storeMapping.status,
+        lastSyncAt: storeMapping.lastSyncAt,
+        shopifyProductId: storeMapping.shopifyProductId,
+        shopifyHandle: storeMapping.shopifyHandle,
+        variantCount: storeMapping.variantMappings.length,
+        createdAt: storeMapping.createdAt,
+        updatedAt: storeMapping.updatedAt
+      };
+    });
+
+    const response = {
+      success: true,
+      productId: productId,
+      productTitle: product.title,
+      totalStores: stores.length,
+      syncedStores: syncStatuses.filter(s => s.isSynced).length,
+      syncStatuses: syncStatuses,
+      generatedAt: new Date()
+    };
+
+    res.status(200).json(
+      new ApiResponse(200, response, 'Product sync status retrieved successfully')
+    );
+
+  } catch (error) {
+    console.error('Product sync status fetch failed:', error);
+    throw new ApiError(
+      error.status || 500,
+      `Failed to get product sync status: ${error.message}`
+    );
+  }
 });
 

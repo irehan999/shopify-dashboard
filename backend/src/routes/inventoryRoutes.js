@@ -15,10 +15,16 @@ import {
   getRealTimeAllocationData
 } from '../controllers/inventoryController.js';
 
+import { createStoreSession } from '../middleware/storeSession.js';
+import { authenticateUser } from '../middleware/auth.js';
+
 const router = Router();
 
-// Get store locations for inventory management
-router.get('/stores/locations', getStoreLocations);
+// All routes require authentication
+router.use(authenticateUser);
+
+// Get store locations for specific store (requires storeId)
+router.get('/stores/:storeId/locations', getStoreLocations);
 
 // Assign inventory from master product to store
 router.post('/products/:productId/stores/:storeId/inventory/assign', assignInventoryToStore);
@@ -33,7 +39,7 @@ router.get('/products/:productId/inventory/summary', getInventorySummary);
 router.get('/products/:productId/stores/:storeId/inventory/history', getInventoryHistory);
 
 // Live Shopify inventory data routes
-router.post('/live-inventory', getLiveShopifyInventory);
+router.post('/products/:productId/stores/:storeId/live-inventory', getLiveShopifyInventory);
 
 // Get inventory allocation recommendations
 router.post('/allocation/recommendations', getInventoryAllocationRecommendations);

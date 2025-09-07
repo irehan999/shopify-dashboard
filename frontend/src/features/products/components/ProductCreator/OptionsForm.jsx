@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Controller, useFieldArray } from 'react-hook-form';
 import { useGenerateVariants } from '../../hooks/useProductApi.js';
 import { toast } from 'react-hot-toast';
+import { classNames } from '@/lib/utils.js';
 
 export const OptionsForm = ({ form }) => {
   const { control, watch, setValue, formState: { errors } } = form;
@@ -115,12 +116,12 @@ export const OptionsForm = ({ form }) => {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-medium text-gray-900 mb-4">
+        <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-1">
           Product Options & Variants
         </h2>
-        <p className="text-sm text-gray-600 mb-6">
+        <p className="text-xs text-gray-600 dark:text-gray-400 mb-4">
           Add product options like Color, Size, Material to create variants. Maximum 3 options allowed.
         </p>
       </div>
@@ -128,18 +129,19 @@ export const OptionsForm = ({ form }) => {
       {/* Options Section */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-medium text-gray-900">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-white">
             Product Options ({optionFields.length}/3)
           </h3>
           <button
             type="button"
             onClick={addNewOption}
             disabled={optionFields.length >= 3}
-            className={`inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md ${
+            className={classNames(
+              "inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md transition-all duration-200",
               optionFields.length >= 3
-                ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
-                : 'text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
-            }`}
+                ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700 cursor-not-allowed'
+                : 'text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/20 hover:bg-blue-200 dark:hover:bg-blue-900/40 focus:outline-none focus:ring-0'
+            )}
           >
             <svg className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -149,19 +151,23 @@ export const OptionsForm = ({ form }) => {
         </div>
 
         {optionFields.length === 0 ? (
-          <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+          <div className="text-center py-8 bg-gray-50 dark:bg-gray-800/50 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600">
             <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012 2v2M7 7h10" />
             </svg>
-            <h3 className="mt-2 text-sm font-medium text-gray-900">No options created</h3>
-            <p className="mt-1 text-sm text-gray-500">
+            <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No options created</h3>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
               Add options like Color, Size, or Material to create product variants
             </p>
             <div className="mt-4">
               <button
                 type="button"
                 onClick={addNewOption}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                className={classNames(
+                  "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md transition-all duration-200",
+                  "text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/20 hover:bg-blue-200 dark:hover:bg-blue-900/40",
+                  "focus:outline-none focus:ring-0"
+                )}
               >
                 <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -173,9 +179,9 @@ export const OptionsForm = ({ form }) => {
         ) : (
           <div className="space-y-4">
             {optionFields.map((field, optionIndex) => (
-              <div key={field.id} className="bg-gray-50 rounded-lg p-4 border">
+              <div key={field.id} className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
                 <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-sm font-medium text-gray-900">
+                  <h4 className="text-sm font-medium text-gray-900 dark:text-white">
                     Option {optionIndex + 1}
                   </h4>
                   <button
@@ -196,19 +202,25 @@ export const OptionsForm = ({ form }) => {
                     control={control}
                     render={({ field }) => (
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Option Name
+                        <label className="block text-xs font-medium text-gray-900 dark:text-white mb-2">
+                          Option Name <span className="text-red-500">*</span>
                         </label>
                         <input
                           {...field}
                           type="text"
-                          className={`block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm ${
-                            errors.options?.[optionIndex]?.name ? 'border-red-300' : ''
-                          }`}
+                          className={classNames(
+                            "block w-full px-3 py-2 rounded-md border transition-all duration-200 text-sm",
+                            "bg-white dark:bg-gray-700 text-gray-900 dark:text-white",
+                            "placeholder-gray-500 dark:placeholder-gray-400",
+                            "focus:outline-none focus:ring-0",
+                            errors.options?.[optionIndex]?.name 
+                              ? "border-red-300 dark:border-red-600 focus:border-red-500 dark:focus:border-red-400" 
+                              : "border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400"
+                          )}
                           placeholder="e.g., Color, Size, Material"
                         />
                         {errors.options?.[optionIndex]?.name && (
-                          <p className="mt-1 text-sm text-red-600">
+                          <p className="mt-1 text-xs text-red-600 dark:text-red-400">
                             {errors.options[optionIndex].name.message}
                           </p>
                         )}
@@ -220,13 +232,13 @@ export const OptionsForm = ({ form }) => {
                 {/* Option Values */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-gray-700">
+                    <label className="block text-xs font-medium text-gray-900 dark:text-white">
                       Option Values
                     </label>
                     <button
                       type="button"
                       onClick={() => addOptionValue(optionIndex)}
-                      className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                      className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-xs font-medium"
                     >
                       + Add Value
                     </button>
@@ -242,7 +254,13 @@ export const OptionsForm = ({ form }) => {
                             <input
                               {...field}
                               type="text"
-                              className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                              className={classNames(
+                                "flex-1 px-3 py-2 rounded-md border transition-all duration-200 text-sm",
+                                "bg-white dark:bg-gray-700 text-gray-900 dark:text-white",
+                                "placeholder-gray-500 dark:placeholder-gray-400",
+                                "border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400",
+                                "focus:outline-none focus:ring-0"
+                              )}
                               placeholder={`Value ${valueIndex + 1}`}
                             />
                           )}
@@ -262,12 +280,12 @@ export const OptionsForm = ({ form }) => {
 
                   {(!watchedOptions[optionIndex]?.optionValues?.length || 
                     watchedOptions[optionIndex].optionValues.length === 0) && (
-                    <div className="text-center py-4 bg-white rounded border-2 border-dashed border-gray-300">
-                      <p className="text-sm text-gray-500">No values added yet</p>
+                    <div className="text-center py-4 bg-gray-50 dark:bg-gray-700/50 rounded border-2 border-dashed border-gray-300 dark:border-gray-600">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">No values added yet</p>
                       <button
                         type="button"
                         onClick={() => addOptionValue(optionIndex)}
-                        className="mt-1 text-blue-600 hover:text-blue-800 text-sm font-medium"
+                        className="mt-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-xs font-medium"
                       >
                         Add first value
                       </button>

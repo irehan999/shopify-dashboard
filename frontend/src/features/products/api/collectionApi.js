@@ -12,38 +12,38 @@ export const collectionApi = {
 
   /**
    * Get collections for a specific store
-   * GET /api/collections/stores/:storeId/collections
+   * GET /api/collections/:storeId
    */
   getStoreCollections: async (storeId, params = {}) => {
-    const response = await api.get(`/api/collections/stores/${storeId}/collections`, { params });
+    const response = await api.get(`/api/collections/${storeId}`, { params });
     return response.data;
   },
 
   /**
    * Get collection details
-   * GET /api/collections/stores/:storeId/collections/:collectionId
+   * GET /api/collections/:storeId/:collectionId
    */
   getCollectionDetails: async (storeId, collectionId) => {
-    const response = await api.get(`/api/collections/stores/${storeId}/collections/${collectionId}`);
+    const response = await api.get(`/api/collections/${storeId}/${collectionId}`);
     return response.data;
   },
 
   /**
    * Create new collection
-   * POST /api/collections/stores/:storeId/collections
+   * POST /api/collections/:storeId
    */
   createCollection: async (storeId, collectionData) => {
-    const response = await api.post(`/api/collections/stores/${storeId}/collections`, collectionData);
+    const response = await api.post(`/api/collections/${storeId}`, collectionData);
     return response.data;
   },
 
   /**
    * Search collections in a store
-   * GET /api/collections/stores/:storeId/collections/search
+   * GET /api/collections/:storeId
    */
   searchCollections: async (storeId, searchQuery, options = {}) => {
-    const params = { query: searchQuery, ...options };
-    const response = await api.get(`/api/collections/stores/${storeId}/collections/search`, { params });
+    const params = { search: searchQuery, ...options };
+    const response = await api.get(`/api/collections/${storeId}`, { params });
     return response.data;
   },
 

@@ -62,6 +62,22 @@ export const useProductForm = (initialData = {}) => {
     
     if (!schema) return true;
     
+    // Special case for step 3 (variants): If no options are defined, variants step is always valid
+    // because we're creating a single variant product
+    if (step === 3) {
+      const formData = form.getValues();
+      const hasOptions = formData.options && formData.options.length > 0;
+      
+      // If no options, step 3 is automatically valid (single variant product)
+      if (!hasOptions) {
+        return true;
+      }
+      
+      // If has options, variants should be generated/present
+      const hasVariants = formData.variants && formData.variants.length > 0;
+      return hasVariants;
+    }
+    
     try {
       schema.parse(stepData);
       return true;

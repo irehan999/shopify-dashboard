@@ -225,24 +225,31 @@ export default function Products() {
                           {product.media && product.media.length > 0 ? (
                             <img
                               className="h-12 w-12 rounded-lg object-cover"
-                              src={product.media[0].url || product.media[0].preview}
+                              src={product.media[0].src || product.media[0].url || product.media[0].preview}
                               alt={product.media[0].alt || product.title}
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                                e.target.nextSibling.style.display = 'flex';
+                              }}
                             />
-                          ) : (
-                            <div className="h-12 w-12 rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                              <ShoppingBagIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
-                            </div>
-                          )}
+                          ) : null}
+                          <div className={`h-12 w-12 rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center ${product.media && product.media.length > 0 ? 'hidden' : ''}`}>
+                            <ShoppingBagIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
+                          </div>
                         </div>
                         <div className="ml-4">
                           <div className="text-sm font-medium text-gray-900 dark:text-white">
                             {product.title}
                           </div>
                           <div className="text-sm text-gray-500 dark:text-gray-400">
-                            {product.description ? 
-                              product.description.length > 50 
-                                ? `${product.description.substring(0, 50)}...` 
-                                : product.description
+                            {product.descriptionHtml ? 
+                              (product.descriptionHtml.replace(/<[^>]*>/g, '').length > 50 
+                                ? `${product.descriptionHtml.replace(/<[^>]*>/g, '').substring(0, 50)}...` 
+                                : product.descriptionHtml.replace(/<[^>]*>/g, ''))
+                              : product.description ? 
+                                (product.description.length > 50 
+                                  ? `${product.description.substring(0, 50)}...` 
+                                  : product.description)
                               : 'No description'
                             }
                           </div>
@@ -295,6 +302,7 @@ export default function Products() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <Dropdown
+                        align="left"
                         trigger={
                           <Button variant="ghost" size="sm" className="p-2">
                             <EllipsisVerticalIcon className="h-5 w-5" />

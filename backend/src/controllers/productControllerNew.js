@@ -166,7 +166,7 @@ const createProduct = asyncHandler(async (req, res) => {
       vendor: vendor?.trim(),
       productType: productType?.trim(),
       tags: tags.map(tag => tag.trim()).filter(Boolean),
-  handle: productHandle,
+      handle: productHandle,
       status,
       published,
       publishDate: publishDate ? new Date(publishDate) : undefined,
@@ -327,8 +327,33 @@ const getProduct = asyncHandler(async (req, res) => {
       throw new ApiError(404, 'Product not found');
     }
 
+    // Get ProductMap data to determine store connections
+    const ProductMap = (await import('../models/ProductMap.js')).ProductMap;
+    const storeMappings = await ProductMap.find({
+      dashboardProductId: id,
+      userId: userId
+    }).populate('storeId', 'shop domain name');
+
+    // Add store connection information to product
+    const productWithMappings = {
+      ...product.toObject(),
+      storeMappings: storeMappings.map(mapping => ({
+        storeId: mapping.storeId._id,
+        shopifyProductId: mapping.shopifyProductId,
+        store: {
+          id: mapping.storeId._id,
+          shop: mapping.storeId.shop,
+          domain: mapping.storeId.domain,
+          name: mapping.storeId.name
+        },
+        lastSyncAt: mapping.lastSyncAt,
+        syncStatus: mapping.syncStatus
+      })),
+      isConnected: storeMappings.length > 0
+    };
+
     res.json(
-      new ApiResponse(200, product, 'Product retrieved successfully')
+      new ApiResponse(200, productWithMappings, 'Product retrieved successfully')
     );
 
   } catch (error) {

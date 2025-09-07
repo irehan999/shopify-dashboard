@@ -26,7 +26,10 @@ export const getCollections = async (session, options = {}) => {
             title
             handle
             updatedAt
-            productsCount
+            productsCount {
+              count
+              precision
+            }
             ruleSet {
               appliedDisjunctively
               rules {

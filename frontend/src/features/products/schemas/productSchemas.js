@@ -143,7 +143,7 @@ export const productFormSchema = z.object({
   media: z.array(mediaSchema).default([]),
   
   // Single variant product fields (used when no options)
-  price: z.number().min(0, 'Price must be positive').default(0),
+  price: z.number().min(0.01, 'Price must be greater than 0'), // Required and > 0
   sku: z.string().optional(),
   inventoryQuantity: z.number().min(0).default(0),
   compareAtPrice: z.number().min(0).optional(),
@@ -168,7 +168,7 @@ export const stepSchemas = {
     published: z.boolean().default(false),
     publishDate: z.string().optional(),
     notes: z.string().max(1000).optional(),
-    price: z.number().min(0, 'Price must be positive'),
+    price: z.number().min(0.01, 'Price must be greater than 0'), // Required and > 0
     sku: z.string().optional(),
     inventoryQuantity: z.number().min(0).default(0),
     seo: z.object({
@@ -214,9 +214,9 @@ export const defaultProductForm = {
   media: [],
   
   // Single variant product fields (used when no options)
-  price: 0,
+  price: undefined, // No default value
   sku: '',
-  inventoryQuantity: 0,
+  inventoryQuantity: undefined, // No default value
   compareAtPrice: undefined,
   weight: undefined,
   weightUnit: 'g',

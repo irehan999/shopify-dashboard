@@ -36,6 +36,12 @@ router.put('/products/:productId/stores/:storeId/update', createStoreSession, sh
 router.post('/products/:productId/stores/:storeId/sync', createStoreSession, shopifyController.executeSyncProduct);
 
 /**
+ * Get Product Sync Status Across All Stores
+ * GET /api/shopify/products/:productId/sync-status
+ */
+router.get('/products/:productId/sync-status', shopifyController.getProductSyncStatus);
+
+/**
  * Product Deletion Routes
  * DELETE /api/shopify/products/:productId/stores/:storeId
  */

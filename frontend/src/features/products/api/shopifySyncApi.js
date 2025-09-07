@@ -12,16 +12,14 @@ export const shopifySyncApi = {
 
   /**
    * Sync product to specific store (create or update)
-   * POST /api/shopify-admin/products/sync
+   * POST /api/shopify-admin/products/:productId/stores/:storeId/sync
    */
   syncProduct: async (productId, storeId, syncOptions = {}) => {
-    const response = await api.post('/api/shopify-admin/products/sync', {
-      productId,
-      storeId,
-      forceSync: syncOptions.forceSync || false,
-      collectionsToJoin: syncOptions.collectionsToJoin || [],
-      inventoryData: syncOptions.inventoryData || {},
-      locationId: syncOptions.locationId || null
+    const response = await api.post(`/api/shopify-admin/products/${productId}/stores/${storeId}/sync`, {
+  forceSync: syncOptions.forceSync || false,
+  // New minimal payload: variant overrides and assigned inventory
+  variantOverrides: syncOptions.variantOverrides || {},
+  assignedInventory: syncOptions.assignedInventory || {}
     });
     return response.data;
   },
@@ -123,17 +121,21 @@ export const shopifySyncApi = {
   // ==============================================
 
   /**
-   * Sync product to multiple stores
+   * Sync product to multiple stores - Updated to handle store-specific options
    */
-  syncToMultipleStores: async (productId, storeIds, options = {}) => {
-    const syncPromises = storeIds.map(storeId => 
-      shopifySyncApi.syncProduct(productId, storeId, options)
-    );
+  syncToMultipleStores: async (productId, storesWithOptions) => {
+    if (!Array.isArray(storesWithOptions)) {
+      throw new Error('storesWithOptions must be an array');
+    }
+
+    const syncPromises = storesWithOptions.map(({ storeId, options = {} }) => {
+      return shopifySyncApi.syncProduct(productId, storeId, options);
+    });
     
     const results = await Promise.allSettled(syncPromises);
     
     return results.map((result, index) => ({
-      storeId: storeIds[index],
+      storeId: storesWithOptions[index].storeId,
       status: result.status,
       data: result.status === 'fulfilled' ? result.value : null,
       error: result.status === 'rejected' ? result.reason : null
@@ -146,9 +148,8 @@ export const shopifySyncApi = {
   formatSyncOptions: (options) => {
     return {
       forceSync: options.forceUpdate || false,
-      collectionsToJoin: options.selectedCollections || [],
-      inventoryData: options.inventoryAssignments || {},
-      locationId: options.selectedLocation || null
+      variantOverrides: options.variantOverrides || {},
+      assignedInventory: options.assignedInventory || {}
     };
   }
 };

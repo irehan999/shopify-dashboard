@@ -34,7 +34,7 @@ export const CheckboxGroup = ({
         
         return (
           <label
-            key={optionValue}
+            key={`checkbox-${optionValue}-${option.id || Math.random()}`}
             className={cn(
               "flex items-start space-x-3 cursor-pointer p-2 rounded-lg hover:bg-gray-50 transition-colors",
               compact && "p-1"

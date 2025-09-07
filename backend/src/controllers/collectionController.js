@@ -52,7 +52,7 @@ export const getStoreCollections = asyncHandler(async (req, res) => {
   const store = await Store.findOne({
     _id: storeId,
     userId: req.user._id,
-    status: 'active'
+    isActive: true
   });
 
   if (!store) {
@@ -61,10 +61,10 @@ export const getStoreCollections = asyncHandler(async (req, res) => {
 
   // Prepare session object for GraphQL
   const session = {
-    shop: store.shopifyDomain,
+    shop: store.shopDomain,
     accessToken: store.accessToken,
-    scope: store.scope,
-    isOnline: store.isOnline || false
+    scope: store.scopes.join(','),
+    isOnline: false
   };
 
   try {
@@ -114,8 +114,8 @@ export const getStoreCollections = asyncHandler(async (req, res) => {
         },
         store: {
           id: store._id,
-          name: store.displayName,
-          domain: store.shopifyDomain
+          name: store.shopName,
+          domain: store.shopDomain
         }
       }, 'Collections fetched successfully')
     );

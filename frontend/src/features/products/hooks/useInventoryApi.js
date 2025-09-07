@@ -12,29 +12,38 @@ import { toast } from 'react-hot-toast';
 // ==============================================
 
 /**
- * Get store locations for inventory management
+ * Get store locations for specific store (used in store push)
  */
-export const useStoreLocations = () => {
+export const useStoreLocationsForStore = (storeId) => {
   return useQuery({
-    queryKey: ['inventory', 'locations'],
+    queryKey: ['inventory', 'locations', storeId],
     queryFn: async () => {
       try {
-        return await inventoryApi.getStoreLocations();
+        return await inventoryApi.getStoreLocations(storeId);
       } catch (e) {
         if (e?.response?.status === 401) {
-          // No Shopify session; return empty list without throwing
+          // No session; return empty list
           return { data: { locations: [] } };
         }
         throw e;
       }
     },
+    enabled: !!storeId,
     staleTime: 10 * 60 * 1000, // 10 minutes
     retry: false,
     select: (data) => {
       // Format locations for easier use in components
-      return data?.data?.locations || [];
+      return data?.data?.locations || data?.locations || [];
     }
   });
+};
+
+/**
+ * Get store locations (legacy function for backward compatibility)
+ * @deprecated Use useStoreLocationsForStore instead
+ */
+export const useStoreLocations = (storeId) => {
+  return useStoreLocationsForStore(storeId);
 };
 
 // ==============================================
@@ -96,7 +105,7 @@ export const useSyncInventoryFromShopify = () => {
 /**
  * Get inventory summary for a product
  */
-export const useInventorySummary = (productId, storeId = null) => {
+export const useInventorySummary = (productId, storeId = null, options = {}) => {
   return useQuery({
     queryKey: ['inventory', 'summary', productId, storeId],
     queryFn: async () => {
@@ -110,7 +119,7 @@ export const useInventorySummary = (productId, storeId = null) => {
         throw e;
       }
     },
-    enabled: !!productId,
+    enabled: !!productId && (options.enabled !== false),
     staleTime: 2 * 60 * 1000, // 2 minutes
     retry: false,
     select: (data) => {
@@ -143,7 +152,6 @@ export const useInventoryHistory = (productId, storeId, options = {}) => {
  */
 export const useProductInventoryManagement = (productId) => {
   const { data: inventorySummary, isLoading: summaryLoading } = useInventorySummary(productId);
-  const { data: locations, isLoading: locationsLoading } = useStoreLocations();
   
   const assignInventory = useAssignInventoryToStore();
   const syncInventory = useSyncInventoryFromShopify();
@@ -151,12 +159,10 @@ export const useProductInventoryManagement = (productId) => {
   return {
     // Data
     inventorySummary,
-    locations,
     
     // Loading states
-    isLoading: summaryLoading || locationsLoading,
+    isLoading: summaryLoading,
     summaryLoading,
-    locationsLoading,
     
     // Actions
     assignInventory: assignInventory.mutate,
@@ -178,7 +184,6 @@ export const useProductInventoryManagement = (productId) => {
 export const useStoreInventoryManagement = (productId, storeId) => {
   const { data: storeSummary, isLoading: summaryLoading } = useInventorySummary(productId, storeId);
   const { data: history, isLoading: historyLoading } = useInventoryHistory(productId, storeId);
-  const { data: locations, isLoading: locationsLoading } = useStoreLocations();
   
   const assignInventory = useAssignInventoryToStore();
   const syncInventory = useSyncInventoryFromShopify();
@@ -187,13 +192,11 @@ export const useStoreInventoryManagement = (productId, storeId) => {
     // Data
     storeSummary,
     history,
-    locations,
     
     // Loading states
-    isLoading: summaryLoading || historyLoading || locationsLoading,
+    isLoading: summaryLoading || historyLoading,
     summaryLoading,
     historyLoading,
-    locationsLoading,
     
     // Actions
     assignInventory: (inventoryData) => 
@@ -212,35 +215,52 @@ export const useStoreInventoryManagement = (productId, storeId) => {
 };
 
 /**
- * Hook for inventory location selection utilities
+ * Hook for inventory location selection utilities - Enhanced for store-specific locations
  */
-export const useLocationSelection = () => {
-  const { data: locations = [], isLoading } = useStoreLocations();
+export const useLocationSelection = (storeId = null) => {
+  // Use store-specific locations if storeId is provided, otherwise use generic locations
+  const { data: locations = [], isLoading } = storeId 
+    ? useStoreLocationsForStore(storeId)
+    : { data: [], isLoading: false }; // No generic locations anymore
   
   return {
     locations,
     isLoading,
     
     // Utility functions
-    getPrimaryLocation: () => locations.find(loc => loc.primary) || locations[0],
+    getPrimaryLocation: () => locations.find(loc => 
+      loc.isActive && loc.fulfillsOnlineOrders && loc.shipsInventory
+    ) || locations.find(loc => loc.isActive) || locations[0],
     getLocationById: (locationId) => locations.find(loc => loc.id === locationId),
     
     // Location options for forms
     locationOptions: locations.map(location => ({
       value: location.id,
       label: location.name,
-      subtitle: location.primary ? 'Primary Location' : location.address?.city,
-      isPrimary: location.primary
+      subtitle: location.isActive 
+        ? (location.fulfillsOnlineOrders ? 'Primary Location' : 'Active') 
+        : 'Inactive',
+      isPrimary: location.isActive && location.fulfillsOnlineOrders,
+      disabled: !location.isActive
     })),
     
     // Format location for display
     formatLocationForDisplay: (location) => ({
       id: location.id,
       name: location.name,
-      isPrimary: location.primary,
-      address: location.address,
-      displayName: location.primary ? `${location.name} (Primary)` : location.name
-    })
+      isPrimary: location.isActive && location.fulfillsOnlineOrders,
+      isActive: location.isActive,
+      fulfillsOnlineOrders: location.fulfillsOnlineOrders,
+      shipsInventory: location.shipsInventory,
+      displayName: location.isActive && location.fulfillsOnlineOrders 
+        ? `${location.name} (Primary)` 
+        : location.name
+    }),
+
+    // Check if store has any active locations
+    hasActiveLocations: locations.some(loc => loc.isActive),
+    activeLocationCount: locations.filter(loc => loc.isActive).length,
+    totalLocationCount: locations.length
   };
 };
 
@@ -251,11 +271,11 @@ export const useLocationSelection = () => {
 /**
  * Get live Shopify inventory data for a product
  */
-export const useLiveShopifyInventory = (productId, locationIds = null) => {
+export const useLiveShopifyInventory = (productId, storeId, locationIds = null) => {
   return useQuery({
-    queryKey: ['inventory', 'live', productId, locationIds],
-    queryFn: () => inventoryApi.getLiveShopifyInventory(productId, locationIds),
-    enabled: !!productId,
+    queryKey: ['inventory', 'live', productId, storeId, locationIds],
+    queryFn: () => inventoryApi.getLiveShopifyInventory(productId, storeId, locationIds),
+    enabled: !!productId && !!storeId,
     staleTime: 30 * 1000, // 30 seconds (for real-time feel)
     refetchInterval: 60 * 1000, // Refetch every minute
     select: (data) => data?.data || null

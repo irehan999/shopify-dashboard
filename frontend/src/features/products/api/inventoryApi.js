@@ -11,12 +11,12 @@ export const inventoryApi = {
   // ==============================================
 
   /**
-   * Get store locations for inventory management
-   * GET /api/inventory/stores/locations
+   * Get store locations for specific store
+   * GET /api/inventory/stores/:storeId/locations
    */
-  getStoreLocations: async () => {
-  const response = await api.get('/api/inventory/stores/locations');
-  return response.data?.data;
+  getStoreLocations: async (storeId) => {
+    const response = await api.get(`/api/inventory/stores/${storeId}/locations`);
+    return response.data?.data;
   },
 
   // ==============================================
@@ -126,14 +126,13 @@ export const inventoryApi = {
 
   /**
    * Get live Shopify inventory data
-   * POST /api/inventory/live-inventory
+   * POST /api/inventory/products/:productId/stores/:storeId/live-inventory
    */
-  getLiveShopifyInventory: async (productId, locationIds = null) => {
-  const response = await api.post('/api/inventory/live-inventory', {
-      productId,
+  getLiveShopifyInventory: async (productId, storeId, locationIds = null) => {
+    const response = await api.post(`/api/inventory/products/${productId}/stores/${storeId}/live-inventory`, {
       locationIds
     });
-  return response.data?.data;
+    return response.data?.data;
   },
 
   /**

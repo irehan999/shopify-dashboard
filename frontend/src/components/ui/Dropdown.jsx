@@ -78,7 +78,7 @@ const Dropdown = ({
                   style={{
                     position: 'absolute',
                     top: position.top,
-                    left: align === 'right' ? position.left - (buttonRef.current?.offsetWidth || 0) : position.left,
+                    left: align === 'right' ? position.left - 200 : position.left, // Fixed right alignment
                     minWidth: position.width,
                   }}
                 >

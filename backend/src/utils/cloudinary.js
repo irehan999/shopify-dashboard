@@ -1,6 +1,8 @@
 import { v2 as cloudinary } from 'cloudinary';
 import fs from "fs";
 import { ApiError } from "./ApiError.js";
+import dotenv from 'dotenv';
+dotenv.config();
 
 // Configuration
 cloudinary.config({ 
@@ -17,7 +19,7 @@ const SHOPIFY_TRANSFORMATIONS = {
         height: 2048,
         crop: "fill",
         quality: "auto:good",
-        format: "auto"
+        f_auto: true // Changed from format: "auto"
     },
     // Product thumbnails
     product_thumb: {
@@ -25,7 +27,7 @@ const SHOPIFY_TRANSFORMATIONS = {
         height: 300,
         crop: "fill",
         quality: "auto:good",
-        format: "auto"
+        f_auto: true // Changed from format: "auto"
     },
     // Collection images
     collection: {
@@ -33,7 +35,7 @@ const SHOPIFY_TRANSFORMATIONS = {
         height: 600,
         crop: "fill",
         quality: "auto:good",
-        format: "auto"
+        f_auto: true // Changed from format: "auto"
     },
     // Store banner/hero images
     banner: {
@@ -41,7 +43,7 @@ const SHOPIFY_TRANSFORMATIONS = {
         height: 1080,
         crop: "fill",
         quality: "auto:best",
-        format: "auto"
+        f_auto: true // Changed from format: "auto"
     }
 };
 
@@ -67,9 +69,9 @@ const uploadOnCloudinary = async (localFilePath, transformationType = 'product_m
             ...transformation,
             // Generate multiple sizes for responsive images
             eager: [
-                { width: 480, height: 480, crop: "fill", quality: "auto:good" },
-                { width: 800, height: 800, crop: "fill", quality: "auto:good" },
-                { width: 1200, height: 1200, crop: "fill", quality: "auto:good" }
+                { width: 480, height: 480, crop: "fill", quality: "auto:good", f_auto: true },
+                { width: 800, height: 800, crop: "fill", quality: "auto:good", f_auto: true },
+                { width: 1200, height: 1200, crop: "fill", quality: "auto:good", f_auto: true }
             ],
             eager_async: true
         });
@@ -122,7 +124,7 @@ const generateShopifyUrl = (publicId, width = 800, height = 800) => {
         height,
         crop: "fill",
         quality: "auto:good",
-        format: "auto",
+        f_auto: true, // Changed from format: "auto"
         secure: true
     });
 };

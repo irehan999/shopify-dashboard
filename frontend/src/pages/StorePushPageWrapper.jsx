@@ -1,16 +1,15 @@
 import React from 'react';
 import { useParams } from 'react-router-dom';
 import { useProduct } from '@/features/products/hooks/useProductApi.js';
-import { ProductDetailController } from '@/features/products/components/ProductDetail/ProductDetailController.jsx';
+import { NewStorePushPage } from '@/features/products/components/StorePushNew/NewStorePushPage.jsx';
 import { LoadingScreen } from '@/components/common/LoadingScreen.jsx';
 import { ErrorScreen } from '@/components/common/ErrorScreen.jsx';
 
 /**
- * ProductDetail Page Component
- * Main page wrapper that fetches product data and delegates rendering
- * to the appropriate ProductDetail component based on store connections
+ * StorePushPageWrapper - New Implementation
+ * Wrapper page for the completely rebuilt StorePush functionality
  */
-const ProductDetail = () => {
+const StorePushPageWrapper = () => {
   const { id } = useParams();
   const { data: product, isLoading, error } = useProduct(id);
 
@@ -40,7 +39,7 @@ const ProductDetail = () => {
     );
   }
 
-  return <ProductDetailController product={product} />;
+  return <NewStorePushPage product={product} />;
 };
 
-export default ProductDetail;
+export default StorePushPageWrapper;

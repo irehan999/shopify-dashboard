@@ -8,6 +8,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { Product } from '../models/ProductOptimized.js';
 import { ProductMap } from '../models/ProductMap.js';
+import { Store } from '../models/Store.js';
 import { 
   getProductInventory,
   getLiveInventoryLevel, 
@@ -18,27 +19,51 @@ import {
 import { getLocations } from '../graphql/queries/locationQueries.js';
 
 /**
- * Get Store Locations
- * Fetches all locations for inventory management
+ * Get Store Locations for Specific Store
+ * Fetches all locations for a specific store - REQUIRES storeId
  */
 export const getStoreLocations = asyncHandler(async (req, res) => {
+  const { storeId } = req.params;
+  
+  if (!storeId) {
+    throw new ApiError(400, 'Store ID is required');
+  }
+
   try {
-    const session = req.session;
-    if (!session) {
-      throw new ApiError(401, 'Shopify session required');
+    // Get the store to verify it exists and belongs to user
+    const store = await Store.findOne({
+      _id: storeId,
+      userId: req.user._id,
+      isActive: true
+    });
+
+    if (!store) {
+      throw new ApiError(404, 'Store not found or inactive');
     }
+
+    // Create session for this specific store
+    const session = {
+      shop: store.shopDomain,
+      accessToken: store.accessToken,
+      state: undefined,
+      isOnline: false,
+      scope: store.scopes.join(',')
+    };
 
     const locationsData = await getLocations(session);
     
     const response = {
       success: true,
+      storeId: storeId,
+      storeName: store.shopName,
+      shopDomain: store.shopDomain,
       locations: locationsData,
       count: locationsData.length,
       executionTime: new Date()
     };
 
     res.status(200).json(
-      new ApiResponse(200, response, 'Store locations retrieved successfully')
+      new ApiResponse(200, response, `Store locations for ${store.shopName} retrieved successfully`)
     );
 
   } catch (error) {
@@ -373,52 +398,90 @@ export const getInventoryHistory = asyncHandler(async (req, res) => {
  */
 export const getLiveShopifyInventory = asyncHandler(async (req, res) => {
   try {
-    const { productId, locationIds } = req.body;
-    const session = req.session;
-
-    if (!session) {
-      throw new ApiError(401, 'Shopify session required');
-    }
+    const { productId, storeId } = req.params;
+    const { locationIds } = req.body;
+    const userId = req.user._id;
 
     if (!productId) {
       throw new ApiError(400, 'Product ID is required');
     }
 
+    if (!storeId) {
+      throw new ApiError(400, 'Store ID is required');
+    }
+
+    // Get store information to create session
+    const Store = (await import('../models/Store.js')).Store;
+    const store = await Store.findOne({ _id: storeId, userId: userId });
+    
+    if (!store) {
+      throw new ApiError(404, 'Store not found');
+    }
+
+    // Create Shopify session using the correct field
+    const session = {
+      shop: store.shopDomain,
+      accessToken: store.accessToken
+    };
+
     let locations = locationIds;
     
     // If no specific locations provided, get all store locations
     if (!locations || locations.length === 0) {
-      const allLocations = await getLocations(session);
-      locations = allLocations.map(loc => loc.id);
+      try {
+        const allLocations = await getLocations(session);
+        locations = allLocations.map(loc => loc.id);
+      } catch (error) {
+        console.warn('Could not fetch locations, proceeding without location filter:', error.message);
+        locations = [];
+      }
     }
 
     // Get live inventory data from Shopify
-    const liveInventoryData = await getLiveProductInventoryByLocations(
-      session, 
-      productId, 
-      locations
-    );
+    // Handle case where we don't have locations - get general inventory
+    let liveInventoryData;
+    if (locations && locations.length > 0) {
+      liveInventoryData = await getLiveProductInventoryByLocations(
+        session, 
+        productId, 
+        locations
+      );
+    } else {
+      // Fall back to basic product inventory if no locations available
+      liveInventoryData = await getProductInventory(session, productId);
+    }
 
     // Format the response for frontend consumption
     const formattedInventory = {
       productId: liveInventoryData.id,
       productTitle: liveInventoryData.title,
       totalInventory: liveInventoryData.totalInventory || 0,
-      variants: liveInventoryData.variants.edges.map(({ node: variant }) => ({
-        variantId: variant.id,
-        variantTitle: variant.title,
-        sku: variant.sku,
-        totalQuantity: variant.inventoryQuantity || 0,
-        inventoryPolicy: variant.inventoryPolicy,
-        inventoryManagement: variant.inventoryManagement,
-        locationBreakdown: variant.inventoryItem.inventoryLevels.edges.map(({ node: level }) => ({
-          locationId: level.location.id,
-          locationName: level.location.name,
-          available: level.available,
-          isActive: level.location.isActive,
-          fulfillsOnlineOrders: level.location.fulfillsOnlineOrders
-        }))
-      }))
+      variants: liveInventoryData.variants.edges.map(({ node: variant }) => {
+        const baseVariant = {
+          variantId: variant.id,
+          variantTitle: variant.title,
+          sku: variant.sku,
+          totalQuantity: variant.inventoryQuantity || 0,
+          inventoryPolicy: variant.inventoryPolicy,
+          inventoryManagement: variant.inventoryManagement
+        };
+
+        // Add location breakdown if available
+        if (variant.inventoryItem && variant.inventoryItem.inventoryLevels) {
+          baseVariant.locationBreakdown = variant.inventoryItem.inventoryLevels.edges.map(({ node: level }) => ({
+            locationId: level.location.id,
+            locationName: level.location.name,
+            available: level.available,
+            isActive: level.location.isActive,
+            fulfillsOnlineOrders: level.location.fulfillsOnlineOrders
+          }));
+        } else {
+          // No location data available
+          baseVariant.locationBreakdown = [];
+        }
+
+        return baseVariant;
+      })
     };
 
     res.status(200).json(

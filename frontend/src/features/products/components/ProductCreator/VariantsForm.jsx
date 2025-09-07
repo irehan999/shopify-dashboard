@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Controller, useFieldArray } from 'react-hook-form';
 import { useCreateVariant, useUpdateVariant, useDeleteVariant } from '../../hooks/useProductApi.js';
+import { classNames } from '@/lib/utils.js';
 
 export const VariantsForm = ({ form }) => {
   const { control, watch, setValue, formState: { errors } } = form;
@@ -14,6 +15,9 @@ export const VariantsForm = ({ form }) => {
   const watchedVariants = watch('variants') || [];
   const watchedOptions = watch('options') || [];
   const basePrice = watch('price') || 0;
+
+  // Check if this is a single variant product (no options)
+  const isSingleVariantProduct = !watchedOptions || watchedOptions.length === 0;
 
   const toggleVariantExpansion = (variantIndex) => {
     const newExpanded = new Set(expandedVariants);
@@ -91,96 +95,152 @@ export const VariantsForm = ({ form }) => {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-medium text-gray-900 mb-4">
+        <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-1">
           Product Variants
         </h2>
-        <p className="text-sm text-gray-600 mb-6">
-          Manage product variants with different prices, SKUs, and inventory settings.
+        <p className="text-xs text-gray-600 dark:text-gray-400 mb-4">
+          {isSingleVariantProduct 
+            ? 'This product has no options, so it will be created as a single variant product with the price and details from the Basic Info step.'
+            : 'Manage product variants with different prices, SKUs, and inventory settings.'
+          }
         </p>
       </div>
 
-      {/* Variant Management Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-base font-medium text-gray-900">
-            Variants ({variantFields.length})
-          </h3>
-          <p className="text-sm text-gray-500">
-            {variantFields.length === 0 
-              ? 'No variants created yet'
-              : `Manage pricing and inventory for each variant`
-            }
-          </p>
-        </div>
-        
-        <div className="flex space-x-2">
-          {variantFields.length > 0 && (
-            <div className="relative">
+      {/* Single Variant Product Message */}
+      {isSingleVariantProduct && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+          <div className="flex items-start">
+            <svg className="h-5 w-5 text-blue-400 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div className="ml-3 flex-1">
+              <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                Single Variant Product
+              </h3>
+              <div className="mt-2 text-sm text-blue-700 dark:text-blue-300">
+                <p>
+                  Since you haven't added any product options (like Color, Size, etc.), this will be created as a single variant product.
+                  The pricing and inventory details from the Basic Info step will be used.
+                </p>
+                <p className="mt-2">
+                  <strong>Current settings:</strong><br/>
+                  • Price: ${basePrice}<br/>
+                  • SKU: {watch('sku') || 'Not set'}<br/>
+                  • Inventory: {watch('inventoryQuantity') || 0} units
+                </p>
+                <p className="mt-2 text-xs">
+                  To create multiple variants, go back to the Options step and add product options.
+                </p>
+              </div>
+            </div>
+            <div className="ml-4">
               <button
                 type="button"
-                className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-                onClick={() => {
-                  const adjustment = prompt('Bulk price adjustment:\n• +10 (add $10)\n• -5 (subtract $5)\n• +10% (increase by 10%)\n• -5% (decrease by 5%)');
-                  if (adjustment) {
-                    const match = adjustment.match(/^([+-]?)(\d+(?:\.\d+)?)(%?)$/);
-                    if (match) {
-                      const [, sign, value, isPercentage] = match;
-                      const numValue = parseFloat(value) * (sign === '-' ? -1 : 1);
-                      bulkUpdatePrices({
-                        type: isPercentage ? 'percentage' : 'fixed',
-                        value: numValue
-                      });
-                    }
-                  }
-                }}
+                onClick={addManualVariant}
+                className={classNames(
+                  "inline-flex items-center px-3 py-2 border border-transparent text-xs font-medium rounded-md transition-all duration-200",
+                  "text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/40 hover:bg-blue-200 dark:hover:bg-blue-900/60",
+                  "focus:outline-none focus:ring-0"
+                )}
               >
-                Bulk Update Prices
+                <svg className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add Variant
               </button>
             </div>
-          )}
-          
-          <button
-            type="button"
-            onClick={addManualVariant}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Variant
-          </button>
-        </div>
-      </div>
-
-      {/* Variants List */}
-      {variantFields.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-          <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-          </svg>
-          <h3 className="mt-2 text-sm font-medium text-gray-900">No variants created</h3>
-          <p className="mt-1 text-sm text-gray-500">
-            {watchedOptions.length > 0 
-              ? 'Generate variants from your options or add manually'
-              : 'Add product options first, or create a manual variant'
-            }
-          </p>
-          <div className="mt-4">
-            <button
-              type="button"
-              onClick={addManualVariant}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Create First Variant
-            </button>
           </div>
         </div>
-      ) : (
+      )}
+
+      {/* Variant Management Header - Only show for multi-variant products */}
+      {!isSingleVariantProduct && (
+        <>
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+                Variants ({variantFields.length})
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {variantFields.length === 0 
+                  ? 'No variants created yet'
+                  : `Manage pricing and inventory for each variant`
+                }
+              </p>
+            </div>
+            
+            <div className="flex space-x-2">
+              {variantFields.length > 0 && (
+                <div className="relative">
+                  <button
+                    type="button"
+                    className={classNames(
+                      "inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 text-sm leading-4 font-medium rounded-md transition-all duration-200",
+                      "text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600",
+                      "focus:outline-none focus:ring-0"
+                    )}
+                    onClick={() => {
+                      const adjustment = prompt('Bulk price adjustment:\n• +10 (add $10)\n• -5 (subtract $5)\n• +10% (increase by 10%)\n• -5% (decrease by 5%)');
+                      if (adjustment) {
+                        const match = adjustment.match(/^([+-]?)(\d+(?:\.\d+)?)(%?)$/);
+                        if (match) {
+                          const [, sign, value, isPercentage] = match;
+                          const numValue = parseFloat(value) * (sign === '-' ? -1 : 1);
+                          bulkUpdatePrices({
+                            type: isPercentage ? 'percentage' : 'fixed',
+                            value: numValue
+                          });
+                        }
+                      }
+                    }}
+                  >
+                    Bulk Update Prices
+                  </button>
+                </div>
+              )}
+              
+              <button
+                type="button"
+                onClick={addManualVariant}
+                className={classNames(
+                  "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md transition-all duration-200",
+                  "text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-0 focus:bg-blue-700"
+                )}
+              >
+                <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add Variant
+              </button>
+            </div>
+          </div>
+
+          {/* Variants List */}
+          {variantFields.length === 0 ? (
+            <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+              <h3 className="mt-2 text-sm font-medium text-gray-900">No variants created</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                Generate variants from your options or add manually
+              </p>
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={addManualVariant}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Create First Variant
+                </button>
+              </div>
+            </div>
+          ) : (
         <div className="space-y-3">
           {variantFields.map((field, variantIndex) => (
             <div key={field.id} className="bg-white border rounded-lg">
@@ -243,7 +303,7 @@ export const VariantsForm = ({ form }) => {
                             control={control}
                             render={({ field }) => (
                               <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">
+                                <label className="block text-xs font-medium text-gray-900 dark:text-white mb-2">
                                   {option.name || `Option ${optionIndex + 1}`}
                                 </label>
                                 <select
@@ -254,7 +314,12 @@ export const VariantsForm = ({ form }) => {
                                     // Ensure optionName stays synced with product option name
                                     setValue(`variants.${variantIndex}.optionValues.${optionIndex}.optionName`, option.name || `Option ${optionIndex + 1}`);
                                   }}
-                                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                  className={classNames(
+                                    "block w-full px-3 py-2 rounded-md border transition-all duration-200 text-sm",
+                                    "bg-white dark:bg-gray-700 text-gray-900 dark:text-white",
+                                    "border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400",
+                                    "focus:outline-none focus:ring-0"
+                                  )}
                                 >
                                   <option value="">Select {option.name}</option>
                                   {(option.optionValues || []).map((value, valueIndex) => (
@@ -273,20 +338,18 @@ export const VariantsForm = ({ form }) => {
 
                   {/* Pricing */}
                   <div>
-                    <h5 className="text-sm font-medium text-gray-900 mb-2">Pricing</h5>
+                    <h5 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Pricing</h5>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <Controller
                         name={`variants.${variantIndex}.price`}
                         control={control}
                         render={({ field }) => (
                           <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              Price *
+                            <label className="block text-xs font-medium text-gray-900 dark:text-white mb-2">
+                              Price <span className="text-red-500">*</span>
                             </label>
                             <div className="relative">
-                              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <span className="text-gray-500 sm:text-sm">$</span>
-                              </div>
+                              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 dark:text-gray-400">$</span>
                               <input
                                 {...field}
                                 value={field.value ?? ''}
@@ -302,7 +365,13 @@ export const VariantsForm = ({ form }) => {
                                     field.onChange(Number.isFinite(num) ? num : undefined);
                                   }
                                 }}
-                                className="block w-full pl-7 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                className={classNames(
+                                  "block w-full pl-7 pr-3 py-2 rounded-md border transition-all duration-200 text-sm",
+                                  "bg-white dark:bg-gray-700 text-gray-900 dark:text-white",
+                                  "placeholder-gray-500 dark:placeholder-gray-400",
+                                  "border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400",
+                                  "focus:outline-none focus:ring-0"
+                                )}
                                 placeholder="0.00"
                               />
                             </div>
@@ -315,13 +384,11 @@ export const VariantsForm = ({ form }) => {
                         control={control}
                         render={({ field }) => (
                           <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                            <label className="block text-xs font-medium text-gray-900 dark:text-white mb-2">
                               Compare At Price
                             </label>
                             <div className="relative">
-                              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <span className="text-gray-500 sm:text-sm">$</span>
-                              </div>
+                              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 dark:text-gray-400">$</span>
                               <input
                                 {...field}
                                 value={field.value ?? ''}
@@ -337,7 +404,13 @@ export const VariantsForm = ({ form }) => {
                                     field.onChange(Number.isFinite(num) ? num : undefined);
                                   }
                                 }}
-                                className="block w-full pl-7 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                className={classNames(
+                                  "block w-full pl-7 pr-3 py-2 rounded-md border transition-all duration-200 text-sm",
+                                  "bg-white dark:bg-gray-700 text-gray-900 dark:text-white",
+                                  "placeholder-gray-500 dark:placeholder-gray-400",
+                                  "border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400",
+                                  "focus:outline-none focus:ring-0"
+                                )}
                                 placeholder="0.00"
                               />
                             </div>
@@ -349,20 +422,26 @@ export const VariantsForm = ({ form }) => {
 
                   {/* SKU & Barcode */}
                   <div>
-                    <h5 className="text-sm font-medium text-gray-900 mb-2">Tracking</h5>
+                    <h5 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Tracking</h5>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <Controller
                         name={`variants.${variantIndex}.sku`}
                         control={control}
                         render={({ field }) => (
                           <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                            <label className="block text-xs font-medium text-gray-900 dark:text-white mb-2">
                               SKU
                             </label>
                             <input
                               {...field}
                               type="text"
-                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                              className={classNames(
+                                "block w-full px-3 py-2 rounded-md border transition-all duration-200 text-sm",
+                                "bg-white dark:bg-gray-700 text-gray-900 dark:text-white",
+                                "placeholder-gray-500 dark:placeholder-gray-400",
+                                "border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400",
+                                "focus:outline-none focus:ring-0"
+                              )}
                               placeholder="Product SKU"
                             />
                           </div>
@@ -374,13 +453,19 @@ export const VariantsForm = ({ form }) => {
                         control={control}
                         render={({ field }) => (
                           <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                            <label className="block text-xs font-medium text-gray-900 dark:text-white mb-2">
                               Barcode
                             </label>
                             <input
                               {...field}
                               type="text"
-                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                              className={classNames(
+                                "block w-full px-3 py-2 rounded-md border transition-all duration-200 text-sm",
+                                "bg-white dark:bg-gray-700 text-gray-900 dark:text-white",
+                                "placeholder-gray-500 dark:placeholder-gray-400",
+                                "border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400",
+                                "focus:outline-none focus:ring-0"
+                              )}
                               placeholder="Product barcode"
                             />
                           </div>
@@ -391,14 +476,14 @@ export const VariantsForm = ({ form }) => {
 
                   {/* Inventory */}
                   <div>
-                    <h5 className="text-sm font-medium text-gray-900 mb-2">Inventory</h5>
+                    <h5 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Inventory</h5>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <Controller
                         name={`variants.${variantIndex}.inventoryQuantity`}
                         control={control}
                         render={({ field }) => (
                           <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                            <label className="block text-xs font-medium text-gray-900 dark:text-white mb-2">
                               Quantity
                             </label>
                             <input
@@ -415,7 +500,13 @@ export const VariantsForm = ({ form }) => {
                                   field.onChange(Number.isFinite(num) ? num : undefined);
                                 }
                               }}
-                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                              className={classNames(
+                                "block w-full px-3 py-2 rounded-md border transition-all duration-200 text-sm",
+                                "bg-white dark:bg-gray-700 text-gray-900 dark:text-white",
+                                "placeholder-gray-500 dark:placeholder-gray-400",
+                                "border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400",
+                                "focus:outline-none focus:ring-0"
+                              )}
                               placeholder="0"
                             />
                           </div>
@@ -427,12 +518,17 @@ export const VariantsForm = ({ form }) => {
                         control={control}
                         render={({ field }) => (
                           <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                            <label className="block text-xs font-medium text-gray-900 dark:text-white mb-2">
                               When out of stock
                             </label>
                             <select
                               {...field}
-                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                              className={classNames(
+                                "block w-full px-3 py-2 rounded-md border transition-all duration-200 text-sm",
+                                "bg-white dark:bg-gray-700 text-gray-900 dark:text-white",
+                                "border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400",
+                                "focus:outline-none focus:ring-0"
+                              )}
                             >
                               <option value="deny">Stop selling</option>
                               <option value="continue">Continue selling</option>
@@ -538,6 +634,8 @@ export const VariantsForm = ({ form }) => {
             </div>
           ))}
         </div>
+      )}
+      </>
       )}
     </div>
   );

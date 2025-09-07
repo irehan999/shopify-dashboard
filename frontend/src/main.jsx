@@ -7,6 +7,7 @@ import { queryClient } from '@/lib'
 import { ThemeProvider } from '@/providers/ThemeProvider'
 import { SocketProvider } from '@/providers/SocketProvider'
 import ErrorBoundary from '@/components/common/ErrorBoundary'
+import useAuthStore from '@/stores/authStore'
 import '@/index.css'
 
 // Components
@@ -16,7 +17,7 @@ import Stores from '@/pages/Stores'
 import Products from '@/pages/Products'
 import ProductCreatePage from '@/pages/ProductCreatePage'
 import ProductDetail from '@/pages/ProductDetail'
-import { StorePushPageWrapper } from '@/features/products/components/StorePush'
+import StorePushPageWrapper from '@/pages/StorePushPageWrapper'
 import Settings from '@/pages/Settings'
 
 // Auth components
@@ -24,6 +25,9 @@ import Login from '@/pages/auth/Login'
 import Signup from '@/pages/auth/Signup'
 import { AuthGuard, PublicRoute } from '@/features/auth/components/AuthGuard'
 import LinkStore from '@/pages/LinkStore'
+
+// Initialize auth system on app startup
+useAuthStore.getState().initializeAuth();
 
 // Create router using createRoutesFromElements
 const router = createBrowserRouter(
