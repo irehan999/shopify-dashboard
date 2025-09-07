@@ -198,7 +198,7 @@ export const defaultProductForm = {
   productType: '',
   tags: [],
   handle: '',
-  status: 'DRAFT',
+  status: 'ACTIVE',
   published: false,
   publishDate: '',
   collectionsToJoin: [],

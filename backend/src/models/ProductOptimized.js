@@ -282,15 +282,19 @@ productSchema.methods.toShopifyProductInput = function() {
     if (this.seo.description) input.seo.description = this.seo.description
   }
   
-  // Add product options for new product model
+  // Add product options for new product model (filter empty values)
   if (this.options?.length) {
-    input.productOptions = this.options.map(option => ({
-      name: option.name,
-      position: option.position,
-      values: option.optionValues?.map(value => ({ 
-        name: value.name 
-      })) || []
-    }))
+    input.productOptions = this.options.map(option => {
+      const rawValues = Array.isArray(option.optionValues) ? option.optionValues : []
+      const cleanedValues = rawValues
+        .filter(v => v && typeof v.name === 'string' && v.name.trim().length > 0)
+        .map(v => ({ name: v.name }))
+      return {
+        name: option.name,
+        position: option.position,
+        values: cleanedValues
+      }
+    })
   }
   
   // Add metafields if exist
@@ -319,8 +323,7 @@ productSchema.methods.toShopifyProductSetInput = function(locationId = null, col
   if (this.productType) input.productType = this.productType
   if (this.tags?.length) input.tags = this.tags
   if (this.status) input.status = this.status
-  if (typeof this.published === 'boolean') input.published = this.published
-  if (this.publishDate) input.publishDate = this.publishDate.toISOString()
+  // Do not include published/publishDate in productSet input (not supported)
   
   // IMPORTANT: As per current requirements, do NOT include collections in productSet input.
   // Collections will be handled via separate mutations after product creation.
@@ -336,19 +339,41 @@ productSchema.methods.toShopifyProductSetInput = function(locationId = null, col
     if (this.seo.description) input.seo.description = this.seo.description
   }
   
-  // Add product options for new product model
+  // Add product options for new product model (filter empty values)
   if (this.options?.length) {
-    input.productOptions = this.options.map(option => ({
-      name: option.name,
-      position: option.position,
-      values: option.optionValues?.map(value => ({ 
-        name: value.name 
-      })) || []
-    }))
+    input.productOptions = this.options.map(option => {
+      const rawValues = Array.isArray(option.optionValues) ? option.optionValues : []
+      const cleanedValues = rawValues
+        .filter(v => v && typeof v.name === 'string' && v.name.trim().length > 0)
+        .map(v => ({ name: v.name }))
+      return {
+        name: option.name,
+        position: option.position,
+        values: cleanedValues
+      }
+    })
   }
   
   // Add variants for productSet
   if (this.variants?.length) {
+    let definedOptions = Array.isArray(this.options) ? this.options : []
+    // If variants exist but no options are defined, inject default option
+    // Shopify requires product options when updating/creating variants
+    if (definedOptions.length === 0) {
+      definedOptions = [{
+        name: 'Title',
+        position: 1,
+        optionValues: [{ name: 'Default' }]
+      }]
+      // Ensure productOptions exists on input with the default
+      input.productOptions = [
+        {
+          name: 'Title',
+          position: 1,
+          values: [{ name: 'Default' }]
+        }
+      ]
+    }
     input.variants = this.variants.map((variant, vIndex) => {
       const override = variantOverrides?.[vIndex] || {};
       const variantInput = {
@@ -369,18 +394,17 @@ productSchema.methods.toShopifyProductSetInput = function(locationId = null, col
       if (variant.barcode) variantInput.barcode = variant.barcode
       if (variant.taxCode) variantInput.taxCode = variant.taxCode
       if (typeof variant.taxable === 'boolean') variantInput.taxable = variant.taxable
-      if (typeof variant.requiresShipping === 'boolean') variantInput.requiresShipping = variant.requiresShipping
+      // Do not include requiresShipping in productSet variant input (not supported)
       
   // Inventory settings
   if (variant.inventoryPolicy) variantInput.inventoryPolicy = variant.inventoryPolicy.toUpperCase()
-  // Per current requirements, do NOT pass inventoryQuantities when we don't have permissions/location.
-  // We'll manage inventory via dedicated inventory mutations later.
-  // if (typeof variant.inventoryQuantity === 'number' && locationId) {
-  //   variantInput.inventoryQuantities = [{
-  //     availableQuantity: variant.inventoryQuantity,
-  //     locationId: locationId
-  //   }]
-  // }
+  // If a location is available, set inventory quantity at that location (enables tracking in Shopify UI)
+  if (typeof variant.inventoryQuantity === 'number' && locationId) {
+        variantInput.inventoryQuantities = [{
+          availableQuantity: variant.inventoryQuantity,
+          locationId: locationId
+        }]
+      }
       
       // Weight
       if (variant.weight) {
@@ -394,13 +418,26 @@ productSchema.methods.toShopifyProductSetInput = function(locationId = null, col
         }
       }
       
-      // Option values for new product model
-  if (variant.optionValues?.length) {
-        variantInput.optionValues = variant.optionValues.map(opt => ({
-          optionName: opt.optionName,
-          name: opt.name
-        }))
-      }
+      // Option values for new product model: align with defined product options
+      const incomingOptionValues = Array.isArray(variant.optionValues) ? variant.optionValues : []
+      const normalizedOptionValues = definedOptions.map((optDef, optIndex) => {
+        // Prefer match by optionName; fallback by index
+        const match = incomingOptionValues.find(ov => ov && ov.optionName === optDef.name) || incomingOptionValues[optIndex]
+        const valueName = (match && typeof match.name === 'string' && match.name.trim().length > 0)
+          ? match.name
+          : (
+            // fallback to first defined option value if present, else 'Default'
+            (Array.isArray(optDef.optionValues) && optDef.optionValues.length > 0 && optDef.optionValues[0].name)
+              ? optDef.optionValues[0].name
+              : 'Default'
+          )
+        return {
+          optionName: optDef.name,
+          name: valueName
+        }
+      })
+      // With the default injection above, definedOptions is always >= 1 here
+      variantInput.optionValues = normalizedOptionValues
       
       // Add metafields if exist on variant
       if (variant.metafields?.length) {

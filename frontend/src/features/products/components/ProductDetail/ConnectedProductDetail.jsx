@@ -219,38 +219,61 @@ export const ConnectedProductDetail = ({ product, onEdit, onPushToStores }) => {
             </CardContent>
           </Card>
 
-          {/* Inventory Summary */}
-          {inventorySummary && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <ChartBarIcon className="h-5 w-5 mr-2" />
-                  Inventory Summary
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {inventoryLoading ? (
-                  <div className="animate-pulse space-y-2">
-                    <div className="h-4 bg-gray-200 rounded"></div>
-                    <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {inventorySummary.masterInventory?.map((variant, index) => (
-                      <div key={variant.id || index} className="flex justify-between items-center p-2 bg-gray-50 rounded">
-                        <span className="text-sm font-medium truncate">
-                          {variant.title || `Variant ${index + 1}`}
-                        </span>
-                        <Badge variant="outline">
-                          {variant.inventoryQuantity || 0} units
-                        </Badge>
+          {/* Enhanced Inventory Summary */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <ChartBarIcon className="h-5 w-5 mr-2" />
+                Inventory Summary
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {inventoryLoading ? (
+                <div className="animate-pulse space-y-2">
+                  <div className="h-4 bg-gray-200 rounded"></div>
+                  <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {product.variants && product.variants.length > 0 ? (
+                    product.variants.map((variant, index) => (
+                      <div key={variant.id || index} className="border rounded-lg p-3">
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <span className="text-sm font-medium">
+                              {variant.title || `Variant ${index + 1}`}
+                            </span>
+                            <p className="text-xs text-gray-500">SKU: {variant.sku || 'Not set'}</p>
+                          </div>
+                          <div className="text-right">
+                            <Badge variant="outline" className="mb-1">
+                              {variant.inventoryQuantity || 0} units
+                            </Badge>
+                            <div className="text-xs text-gray-500">
+                              {variant.inventoryManagement === 'shopify' ? 'Tracked' : 'Not tracked'}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-600">
+                            Policy: {variant.inventoryPolicy === 'deny' ? 'Deny overselling' : 'Allow overselling'}
+                          </span>
+                          <span className="text-gray-600">
+                            ${variant.price || 0}
+                            {variant.compareAtPrice && (
+                              <span className="line-through ml-1">${variant.compareAtPrice}</span>
+                            )}
+                          </span>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-500">No variants found</p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
 

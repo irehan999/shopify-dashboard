@@ -367,6 +367,10 @@ export const BasicInfoForm = ({ form }) => {
                           field.onChange(Number.isFinite(num) ? num : undefined);
                         }
                       }}
+                      onFocus={(e) => {
+                        // Select all text when focusing for easy editing
+                        e.target.select();
+                      }}
                       className={classNames(
                         "block w-full pl-7 pr-3 py-2 rounded-md border transition-colors duration-200 text-sm",
                         "bg-white dark:bg-gray-700 text-gray-900 dark:text-white",
@@ -408,6 +412,10 @@ export const BasicInfoForm = ({ form }) => {
                           field.onChange(Number.isFinite(num) ? num : undefined);
                         }
                       }}
+                      onFocus={(e) => {
+                        // Select all text when focusing for easy editing
+                        e.target.select();
+                      }}
                       className={classNames(
                         "block w-full pl-7 pr-3 py-2 rounded-md border transition-colors duration-200 text-sm",
                         "bg-white dark:bg-gray-700 text-gray-900 dark:text-white",
@@ -437,15 +445,19 @@ export const BasicInfoForm = ({ form }) => {
                     value={field.value ?? ''}
                     type="number"
                     min="0"
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      if (v === '' || v === undefined || v === null) {
-                        field.onChange(undefined);
-                      } else {
-                        const num = parseInt(v, 10);
-                        field.onChange(Number.isFinite(num) ? num : undefined);
-                      }
-                    }}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === '' || v === undefined || v === null) {
+                          field.onChange(undefined);
+                        } else {
+                          const num = parseInt(v, 10);
+                          field.onChange(Number.isFinite(num) ? num : undefined);
+                        }
+                      }}
+                      onFocus={(e) => {
+                        // Select all text when focusing for easy editing
+                        e.target.select();
+                      }}
                     className={classNames(
                       "block w-full px-3 py-2 rounded-md border transition-colors duration-200 text-sm",
                       "bg-white dark:bg-gray-700 text-gray-900 dark:text-white",
@@ -536,6 +548,10 @@ export const BasicInfoForm = ({ form }) => {
                           const num = Number(v);
                           field.onChange(Number.isFinite(num) ? num : undefined);
                         }
+                      }}
+                      onFocus={(e) => {
+                        // Select all text when focusing for easy editing
+                        e.target.select();
                       }}
                       className={classNames(
                         "block flex-1 px-3 py-2 rounded-md border transition-colors duration-200 text-sm",

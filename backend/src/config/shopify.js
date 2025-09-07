@@ -34,7 +34,10 @@ export const shopify = shopifyApi({
     'read_product_listings', 
     'write_product_listings',
     'read_files',
-    'write_files'
+    'write_files',
+    'read_inventory',
+    'write_inventory',
+    'read_locations'
   ],
   
   // App URL configuration

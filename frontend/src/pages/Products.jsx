@@ -27,15 +27,15 @@ import { toast } from 'react-hot-toast'
 
 const statusOptions = [
   { value: 'all', label: 'All Status' },
-  { value: 'published', label: 'Published' },
-  { value: 'draft', label: 'Draft' },
-  { value: 'archived', label: 'Archived' },
+  { value: 'ACTIVE', label: 'Active' },
+  { value: 'DRAFT', label: 'Draft' },
+  { value: 'ARCHIVED', label: 'Archived' },
 ]
 
 const statusColors = {
-  published: 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-400',
-  draft: 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-400',
-  archived: 'bg-gray-100 dark:bg-gray-900/20 text-gray-800 dark:text-gray-400',
+  ACTIVE: 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-400',
+  DRAFT: 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-400',
+  ARCHIVED: 'bg-gray-100 dark:bg-gray-900/20 text-gray-800 dark:text-gray-400',
 }
 
 export default function Products() {
@@ -257,11 +257,8 @@ export default function Products() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <Badge 
-                        variant={product.status === 'published' ? 'default' : 'secondary'}
-                        className={statusColors[product.status]}
-                      >
-                        {product.status}
+                      <Badge className={statusColors[product.status] || ''}>
+                        {product.status || 'DRAFT'}
                       </Badge>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
@@ -284,14 +281,14 @@ export default function Products() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       <div className="flex flex-wrap gap-1">
-                        {product.storeMappings && product.storeMappings.length > 0 ? (
+                        {product.isConnected ? (
                           product.storeMappings.slice(0, 2).map((mapping, index) => (
-                            <Badge key={index} variant="outline" className="text-xs">
-                              {mapping.storeName || `Store ${mapping.storeId}`}
+                            <Badge key={index} variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                              {mapping.store?.shop || mapping.storeName || `Store ${mapping.storeId}`}
                             </Badge>
                           ))
                         ) : (
-                          <span className="text-gray-400">No stores</span>
+                          <span className="text-gray-400">Not connected</span>
                         )}
                         {product.storeMappings && product.storeMappings.length > 2 && (
                           <Badge variant="outline" className="text-xs">
@@ -302,7 +299,7 @@ export default function Products() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <Dropdown
-                        align="left"
+                        align="right"
                         trigger={
                           <Button variant="ghost" size="sm" className="p-2">
                             <EllipsisVerticalIcon className="h-5 w-5" />
@@ -321,19 +318,28 @@ export default function Products() {
                         >
                           Edit Product
                         </Dropdown.Item>
-                        <Dropdown.Item
-                          onClick={() => handlePushToStores(product._id)}
-                          icon={ArrowTopRightOnSquareIcon}
-                        >
-                          Push to Stores
-                        </Dropdown.Item>
+                        {!product.isConnected ? (
+                          <Dropdown.Item
+                            onClick={() => handlePushToStores(product._id)}
+                            icon={ArrowTopRightOnSquareIcon}
+                          >
+                            Push to Stores
+                          </Dropdown.Item>
+                        ) : (
+                          <Dropdown.Item
+                            onClick={() => handlePushToStores(product._id)}
+                            icon={ArrowTopRightOnSquareIcon}
+                          >
+                            Manage Stores
+                          </Dropdown.Item>
+                        )}
                         <Dropdown.Separator />
                         <Dropdown.Item
                           onClick={() => setDeleteConfirm(product)}
                           icon={TrashIcon}
                           className="text-red-600 hover:text-red-700 hover:bg-red-50"
                         >
-                          Delete Product
+                          {product.isConnected ? 'Delete from All Stores' : 'Delete Product'}
                         </Dropdown.Item>
                       </Dropdown>
                     </td>
@@ -395,21 +401,21 @@ export default function Products() {
             Are you sure you want to delete "<strong>{deleteConfirm?.title}</strong>"? This action cannot be undone.
           </p>
           
-          {deleteConfirm?.storeMappings && deleteConfirm.storeMappings.length > 0 && (
-            <div className="bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+          {deleteConfirm?.isConnected && (
+            <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-lg p-3">
               <div className="flex">
                 <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                   </svg>
                 </div>
                 <div className="ml-3">
-                  <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                    Warning
+                  <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+                    Critical Warning
                   </h3>
-                  <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
-                    This product is currently synced to {deleteConfirm.storeMappings.length} store{deleteConfirm.storeMappings.length !== 1 ? 's' : ''}. 
-                    Deleting it here will not remove it from your Shopify stores.
+                  <div className="mt-2 text-sm text-red-700 dark:text-red-300">
+                    This product is connected to {deleteConfirm.storeMappings.length} store{deleteConfirm.storeMappings.length !== 1 ? 's' : ''}. 
+                    Deleting will remove it from ALL connected stores and cannot be undone.
                   </div>
                 </div>
               </div>

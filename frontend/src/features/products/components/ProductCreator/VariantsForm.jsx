@@ -30,17 +30,19 @@ export const VariantsForm = ({ form }) => {
   };
 
   const addManualVariant = () => {
+    const basicInfo = form.getValues();
     const newVariant = {
       price: basePrice,
-      compareAtPrice: undefined,
-      sku: '',
-      barcode: '',
-      inventoryQuantity: 0,
+      compareAtPrice: basicInfo.compareAtPrice,
+      sku: basicInfo.sku ? `${basicInfo.sku}-${variantFields.length + 1}` : '',
+      barcode: basicInfo.barcode || '',
+      inventoryQuantity: basicInfo.inventoryQuantity || 0,
       inventoryPolicy: 'deny',
+      inventoryManagement: 'not_managed',
       taxable: true,
       requiresShipping: true,
-      weight: 0,
-      weightUnit: 'g',
+      weight: basicInfo.weight || 0,
+      weightUnit: basicInfo.weightUnit || 'g',
       optionValues: watchedOptions.map(option => ({
         optionName: option.name,
         name: ''
@@ -128,7 +130,9 @@ export const VariantsForm = ({ form }) => {
                   <strong>Current settings:</strong><br/>
                   • Price: ${basePrice}<br/>
                   • SKU: {watch('sku') || 'Not set'}<br/>
-                  • Inventory: {watch('inventoryQuantity') || 0} units
+                  • Inventory: {watch('inventoryQuantity') || 0} units<br/>
+                  • Weight: {watch('weight') || 0} {watch('weightUnit') || 'g'}<br/>
+                  • Barcode: {watch('barcode') || 'Not set'}
                 </p>
                 <p className="mt-2 text-xs">
                   To create multiple variants, go back to the Options step and add product options.
@@ -365,6 +369,10 @@ export const VariantsForm = ({ form }) => {
                                     field.onChange(Number.isFinite(num) ? num : undefined);
                                   }
                                 }}
+                                onFocus={(e) => {
+                                  // Select all text when focusing for easy editing
+                                  e.target.select();
+                                }}
                                 className={classNames(
                                   "block w-full pl-7 pr-3 py-2 rounded-md border transition-all duration-200 text-sm",
                                   "bg-white dark:bg-gray-700 text-gray-900 dark:text-white",
@@ -403,6 +411,10 @@ export const VariantsForm = ({ form }) => {
                                     const num = Number(v);
                                     field.onChange(Number.isFinite(num) ? num : undefined);
                                   }
+                                }}
+                                onFocus={(e) => {
+                                  // Select all text when focusing for easy editing
+                                  e.target.select();
                                 }}
                                 className={classNames(
                                   "block w-full pl-7 pr-3 py-2 rounded-md border transition-all duration-200 text-sm",
@@ -500,6 +512,10 @@ export const VariantsForm = ({ form }) => {
                                   field.onChange(Number.isFinite(num) ? num : undefined);
                                 }
                               }}
+                              onFocus={(e) => {
+                                // Select all text when focusing for easy editing
+                                e.target.select();
+                              }}
                               className={classNames(
                                 "block w-full px-3 py-2 rounded-md border transition-all duration-200 text-sm",
                                 "bg-white dark:bg-gray-700 text-gray-900 dark:text-white",
@@ -507,7 +523,7 @@ export const VariantsForm = ({ form }) => {
                                 "border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400",
                                 "focus:outline-none focus:ring-0"
                               )}
-                              placeholder="0"
+                              placeholder="Enter quantity"
                             />
                           </div>
                         )}

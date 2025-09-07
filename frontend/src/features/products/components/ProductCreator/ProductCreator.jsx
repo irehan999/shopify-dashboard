@@ -104,10 +104,11 @@ export const ProductCreator = ({ onSuccess, initialData }) => {
         onSuccess(created);
       } else {
         // Navigate to product detail page (backend returns ApiResponse.data with _id)
-        const newId = created?._id || created?.id;
+        const newId = created?._id || created?.id || created?.data?._id || created?.data?.id;
         if (newId) {
           navigate(`/products/${newId}`);
         } else {
+          console.error('No product ID returned from creation:', created);
           // Fallback to products list if no ID
           navigate('/products');
         }

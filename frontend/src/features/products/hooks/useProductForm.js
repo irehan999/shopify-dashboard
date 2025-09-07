@@ -27,23 +27,45 @@ export const useProductForm = (initialData = {}) => {
   // Generate variants from options
   const handleGenerateVariants = useCallback(async () => {
     const options = form.getValues('options');
+    const basicInfo = form.getValues();
     
     if (!options || options.length === 0) {
+      // Single variant product - use values from Basic Info
       form.setValue('variants', [{
-        price: form.getValues('price') || 0,
+        price: basicInfo.price || 0,
+        compareAtPrice: basicInfo.compareAtPrice,
+        sku: basicInfo.sku || '',
+        barcode: basicInfo.barcode || '',
+        inventoryQuantity: basicInfo.inventoryQuantity || 0,
+        inventoryPolicy: 'deny',
+        inventoryManagement: 'not_managed',
+        taxable: true,
+        requiresShipping: true,
+        weight: basicInfo.weight || 0,
+        weightUnit: basicInfo.weightUnit || 'g',
         optionValues: [],
-        inventoryQuantity: 0
+        position: 1
       }]);
       return;
     }
 
     try {
       const result = await generateVariants.mutateAsync({ options });
-      const variants = result.variants.map(variant => ({
+      const variants = result.variants.map((variant, index) => ({
         ...variant,
-        price: form.getValues('price') || 0,
-        inventoryQuantity: 0,
-        mediaIds: []
+        price: basicInfo.price || 0, // Use basic info price as default
+        compareAtPrice: basicInfo.compareAtPrice,
+        sku: basicInfo.sku ? `${basicInfo.sku}-${index + 1}` : '', // Generate SKU variants
+        barcode: basicInfo.barcode || '',
+        inventoryQuantity: basicInfo.inventoryQuantity || 0,
+        inventoryPolicy: 'deny',
+        inventoryManagement: 'not_managed',
+        taxable: true,
+        requiresShipping: true,
+        weight: basicInfo.weight || 0,
+        weightUnit: basicInfo.weightUnit || 'g',
+        mediaIds: [],
+        position: index + 1
       }));
       
       form.setValue('variants', variants);
@@ -52,8 +74,33 @@ export const useProductForm = (initialData = {}) => {
     }
   }, [form, generateVariants]);
 
-  // Disable auto-generation to avoid heavy loops; user triggers via button in OptionsForm
-  useEffect(() => {}, [watchedOptions]);
+  // Auto-generate single variant when moving to variants step if no options
+  useEffect(() => {
+    if (currentStep === 3) { // Variants step
+      const options = form.getValues('options');
+      const variants = form.getValues('variants');
+      
+      // If no options and no variants, create single variant from basic info
+      if ((!options || options.length === 0) && (!variants || variants.length === 0)) {
+        const basicInfo = form.getValues();
+        form.setValue('variants', [{
+          price: basicInfo.price || 0,
+          compareAtPrice: basicInfo.compareAtPrice,
+          sku: basicInfo.sku || '',
+          barcode: basicInfo.barcode || '',
+          inventoryQuantity: basicInfo.inventoryQuantity || 0,
+          inventoryPolicy: 'deny',
+          inventoryManagement: 'not_managed',
+          taxable: true,
+          requiresShipping: true,
+          weight: basicInfo.weight || 0,
+          weightUnit: basicInfo.weightUnit || 'g',
+          optionValues: [],
+          position: 1
+        }]);
+      }
+    }
+  }, [currentStep, form]);
 
   // Step validation
   const validateStep = useCallback((step) => {

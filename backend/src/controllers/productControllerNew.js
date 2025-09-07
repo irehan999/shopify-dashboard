@@ -272,12 +272,39 @@ const getUserProducts = asyncHandler(async (req, res) => {
     const totalProducts = await Product.countDocuments(filterQuery);
     const totalPages = Math.ceil(totalProducts / parseInt(limit));
 
-    // Add computed fields
+    // Get ProductMap data to determine store connections for each product
+    const ProductMap = (await import('../models/ProductMap.js')).ProductMap;
+    const productIds = products.map(p => p._id);
+    
+    const storeMappings = await ProductMap.find({
+      dashboardProduct: { $in: productIds }
+    }).populate('storeMappings.store', 'shop domain name');
+
+    // Create a map of productId to store mappings
+    const mappingsMap = {};
+    storeMappings.forEach(mapping => {
+      mappingsMap[mapping.dashboardProduct.toString()] = mapping.storeMappings.map(sm => ({
+        storeId: sm.store._id,
+        shopifyProductId: sm.shopifyProductId,
+        store: {
+          id: sm.store._id,
+          shop: sm.store.shop,
+          domain: sm.store.domain,
+          name: sm.store.name
+        },
+        lastSyncAt: sm.lastSyncAt,
+        syncStatus: sm.status
+      }));
+    });
+
+    // Add computed fields and connection information
     const enrichedProducts = products.map(product => ({
       ...product,
       variantCount: product.variants?.length || 0,
       hasImages: product.media?.some(m => m.mediaContentType === 'IMAGE') || false,
-      priceRange: calculatePriceRange(product.variants)
+      priceRange: calculatePriceRange(product.variants),
+      storeMappings: mappingsMap[product._id.toString()] || [],
+      isConnected: (mappingsMap[product._id.toString()] || []).length > 0
     }));
 
     res.json(

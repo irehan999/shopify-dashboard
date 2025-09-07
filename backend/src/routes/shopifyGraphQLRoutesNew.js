@@ -35,6 +35,10 @@ router.put('/products/:productId/stores/:storeId/update', createStoreSession, sh
  */
 router.post('/products/:productId/stores/:storeId/sync', createStoreSession, shopifyController.executeSyncProduct);
 
+// Variant media association (dashboard only; does not require store session)
+// POST /api/shopify/products/:productId/variants/media
+router.post('/products/:productId/variants/media', shopifyController.associateVariantMedia);
+
 /**
  * Get Product Sync Status Across All Stores
  * GET /api/shopify/products/:productId/sync-status

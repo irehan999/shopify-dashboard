@@ -17,6 +17,7 @@ import Stores from '@/pages/Stores'
 import Products from '@/pages/Products'
 import ProductCreatePage from '@/pages/ProductCreatePage'
 import ProductDetail from '@/pages/ProductDetail'
+import ProductEdit from '@/pages/ProductEdit'
 import StorePushPageWrapper from '@/pages/StorePushPageWrapper'
 import Settings from '@/pages/Settings'
 
@@ -47,6 +48,7 @@ const router = createBrowserRouter(
         <Route path="products/create" element={<ProductCreatePage />} />
         <Route path="products/:id" element={<ProductDetail />} />
         <Route path="products/:id/push" element={<StorePushPageWrapper />} />
+        <Route path="products/:id/edit" element={<ProductEdit />} />
         <Route path="settings" element={<Settings />} />
       </Route>
     </>

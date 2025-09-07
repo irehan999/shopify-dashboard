@@ -129,7 +129,7 @@ export const productVariantSchema = new mongoose.Schema({
   inventoryManagement: {
     type: String,
     enum: ['shopify', 'not_managed'],
-    default: 'shopify'
+    default: 'not_managed'
   },
   
   // SHIPPING & TAX
@@ -160,6 +160,12 @@ export const productVariantSchema = new mongoose.Schema({
   
   // NEW PRODUCT MODEL: Option values
   optionValues: [variantOptionValueSchema],
+  
+  // Variant-specific media linkage (indexes referencing product.media array)
+  mediaIndexes: {
+    type: [Number],
+    default: []
+  },
   
   // DASHBOARD FIELDS
   position: {

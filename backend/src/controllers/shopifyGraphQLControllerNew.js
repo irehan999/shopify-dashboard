@@ -301,15 +301,47 @@ export const executeSyncProduct = asyncHandler(async (req, res) => {
     let result;
     let operation;
 
-  // Inventory/location: keep simple for now; do not require location.
-  const targetLocationId = null; // TODO: Re-enable location resolution when permissions are granted
+  // Resolve primary location to enable inventory tracking in Shopify UI
+  let targetLocationId = null;
+  try {
+    const primary = await getPrimaryLocationId(session);
+    if (primary) targetLocationId = primary;
+  } catch (e) {
+    console.warn('Could not resolve primary location; proceeding without inventory quantities');
+  }
 
   // Use productSet mutation for upsert functionality (Shopify recommended approach)
   // Merge variant overrides into the productSet input
   const productSetInput = product.toShopifyProductSetInput(targetLocationId, [], variantOverrides);
+  // Pre-flight: remove unsupported fields if present accidentally
+  if ('published' in productSetInput) delete productSetInput.published;
+  if ('publishDate' in productSetInput) delete productSetInput.publishDate;
+  if (Array.isArray(productSetInput.variants)) {
+    productSetInput.variants = productSetInput.variants.map(v => {
+      const copy = { ...v };
+      if ('requiresShipping' in copy) delete copy.requiresShipping;
+      if (!Array.isArray(copy.optionValues)) copy.optionValues = [];
+      return copy;
+    });
+  }
   // Debug: show the exact ProductSetInput we will send
   console.log('StorePush Debug: productSetInput ->', JSON.stringify(productSetInput, null, 2));
     result = await syncProduct(session, productSetInput);
+
+    // Attach media after upsert if dashboard has media (non-fatal on failure)
+    try {
+      if (product.media?.length) {
+        const mediaInput = product.toShopifyMediaInput();
+        const filesResult = await createFiles(session, mediaInput);
+        const productMediaInput = filesResult.files.map(file => ({
+          originalSource: file.image?.url || file.sources?.[0]?.url,
+          alt: file.alt
+        }));
+        await createProductMedia(session, result.product.id, productMediaInput);
+      }
+    } catch (mediaErr) {
+      console.warn('Media attach after productSet failed (non-fatal):', mediaErr?.message || mediaErr);
+    }
     
     // Determine operation based on whether mapping existed
     operation = mapping ? 'updated' : 'created';
@@ -895,5 +927,32 @@ export const getProductSyncStatus = asyncHandler(async (req, res) => {
       `Failed to get product sync status: ${error.message}`
     );
   }
+});
+
+// Associate dashboard media to variant by index mapping
+export const associateVariantMedia = asyncHandler(async (req, res) => {
+  const { productId } = req.params;
+  const { variantIndex, mediaIndexes } = req.body; // mediaIndexes: number[] referencing product.media positions
+
+  if (!Array.isArray(mediaIndexes)) {
+    throw new ApiError(400, 'mediaIndexes must be an array of numbers');
+  }
+
+  const product = await Product.findById(productId);
+  if (!product) throw new ApiError(404, 'Product not found');
+
+  if (!product.variants || variantIndex < 0 || variantIndex >= product.variants.length) {
+    throw new ApiError(400, 'Invalid variantIndex');
+  }
+
+  const withinBounds = mediaIndexes.every((i) => Number.isInteger(i) && i >= 0 && i < (product.media?.length || 0));
+  if (!withinBounds) {
+    throw new ApiError(400, 'One or more mediaIndexes are out of bounds');
+  }
+
+  product.variants[variantIndex].mediaIndexes = mediaIndexes;
+  await product.save();
+
+  res.status(200).json(new ApiResponse(200, { product }, 'Variant media association updated'));
 });
 
