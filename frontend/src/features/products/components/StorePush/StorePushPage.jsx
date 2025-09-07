@@ -329,7 +329,6 @@ export const StorePushPage = ({ product }) => {
             selectedStores={selectedStores}
             onSelectionChange={handleStoreSelection}
             isLoading={storesLoading}
-            advanced={isAdvancedMode}
           />
 
           {/* No collections or location configuration in this flow */}

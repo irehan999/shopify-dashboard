@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/Button.jsx';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import { StoreSelectionCard } from './StoreSelectionCard.jsx';
-import { StoreConfigurationCard } from './StoreConfigurationCard.jsx';
+// Collections/Locations UI disabled in new flow
+// import { StoreConfigurationCard } from './StoreConfigurationCard.jsx';
+import { StoreOverridesCard } from './StoreOverridesCard.jsx';
 import { PushProgressCard } from './PushProgressCard.jsx';
 import { useConnectedStores } from '@/features/shopify/hooks/useShopify.js';
 import { useSyncToMultipleStores } from '../../hooks/useShopifySync.js';
@@ -22,7 +24,9 @@ export const NewStorePushPage = ({ product }) => {
   
   // State Management
   const [selectedStores, setSelectedStores] = useState([]);
-  const [storeConfigurations, setStoreConfigurations] = useState({});
+  // Per-store overrides and inventory assignment
+  // { [storeId]: { variantOverrides: { [index]: { price?, compareAtPrice?, sku? } }, assignedInventory: { [index]: number } } }
+  const [storeOverrides, setStoreOverrides] = useState({});
   const [pushProgress, setPushProgress] = useState(null);
   const [isPushing, setIsPushing] = useState(false);
 
@@ -37,21 +41,21 @@ export const NewStorePushPage = ({ product }) => {
       storesLoading, 
       storesCount: stores?.length,
       selectedStores,
-      storeConfigurations 
+      storeOverrides 
     });
-  }, [stores, storesLoading, selectedStores, storeConfigurations]);
+  }, [stores, storesLoading, selectedStores, storeOverrides]);
 
   // Event Handlers
   const handleStoreToggle = (storeId) => {
     setSelectedStores(prev => {
       const isSelected = prev.includes(storeId);
       if (isSelected) {
-        // Remove store and its configuration
+        // Remove store and its overrides
         const newSelected = prev.filter(id => id !== storeId);
-        setStoreConfigurations(prevConfig => {
-          const newConfig = { ...prevConfig };
-          delete newConfig[storeId];
-          return newConfig;
+        setStoreOverrides(prevState => {
+          const next = { ...prevState };
+          delete next[storeId];
+          return next;
         });
         return newSelected;
       } else {
@@ -61,24 +65,8 @@ export const NewStorePushPage = ({ product }) => {
     });
   };
 
-  const handleStoreCollectionsChange = (storeId, collectionIds) => {
-    setStoreConfigurations(prev => ({
-      ...prev,
-      [storeId]: {
-        ...prev[storeId],
-        collections: collectionIds
-      }
-    }));
-  };
-
-  const handleStoreLocationChange = (storeId, locationId) => {
-    setStoreConfigurations(prev => ({
-      ...prev,
-      [storeId]: {
-        ...prev[storeId],
-        location: locationId
-      }
-    }));
+  const handleOverridesChange = (storeId, next) => {
+    setStoreOverrides(prev => ({ ...prev, [storeId]: next }));
   };
 
   const handleStartPush = async () => {
@@ -99,19 +87,15 @@ export const NewStorePushPage = ({ product }) => {
 
       // Prepare sync options for each store
       const storesWithOptions = selectedStores.map(storeId => {
-        const config = storeConfigurations[storeId] || {};
-        return {
+        const ov = storeOverrides[storeId] || {};
+        return ({
           storeId,
           options: {
             forceSync: true,
-            ...(config.collections?.length > 0 && {
-              collectionsToJoin: config.collections
-            }),
-            ...(config.location && {
-              locationId: config.location
-            })
+            variantOverrides: ov.variantOverrides || {},
+            assignedInventory: ov.assignedInventory || {}
           }
-        };
+        });
       });
 
       // Execute the push
@@ -208,28 +192,16 @@ export const NewStorePushPage = ({ product }) => {
             isLoading={storesLoading}
           />
 
-          {/* Store Configurations */}
-          {selectedStoreObjects.length > 0 && (
-            <div className="space-y-4">
-              <h2 className="text-lg font-medium text-gray-900">
-                Store Configuration
-              </h2>
-              {selectedStoreObjects.map(store => (
-                <StoreConfigurationCard
-                  key={`config-${store.id}-${store._id || Math.random()}`}
-                  store={store}
-                  selectedCollections={storeConfigurations[store.id]?.collections || []}
-                  selectedLocation={storeConfigurations[store.id]?.location || ''}
-                  onCollectionsChange={(collections) => 
-                    handleStoreCollectionsChange(store.id, collections)
-                  }
-                  onLocationChange={(location) => 
-                    handleStoreLocationChange(store.id, location)
-                  }
-                />
-              ))}
-            </div>
-          )}
+          {/* Per-store overrides and inventory assignment */}
+          {selectedStoreObjects.map((store) => (
+            <StoreOverridesCard
+              key={`ov-${store._id}`}
+              store={store}
+              product={product}
+              value={storeOverrides[store._id]}
+              onChange={(next) => handleOverridesChange(store._id, next)}
+            />
+          ))}
         </div>
 
         {/* Right Column - Progress and Actions */}
