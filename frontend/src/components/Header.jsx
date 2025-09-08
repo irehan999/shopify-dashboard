@@ -2,7 +2,6 @@ import { Fragment } from 'react'
 import { Menu, Transition } from '@headlessui/react'
 import { Link, useNavigate } from 'react-router-dom'
 import { 
-  BellIcon, 
   UserCircleIcon,
   SunIcon,
   MoonIcon,
@@ -14,6 +13,7 @@ import {
 import { useTheme } from '@/providers/ThemeProvider'
 import useAuthStore from '@/stores/authStore'
 import { useLogout } from '@/features/auth/hooks/useAuth'
+import NotificationDropdown from '@/features/notifications/components/NotificationDropdown'
 
 export default function Header() {
   const { effectiveTheme, toggleTheme } = useTheme()
@@ -83,10 +83,7 @@ export default function Header() {
             </button>
 
             {/* Notifications */}
-            <button className="p-2 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-200 relative">
-              <BellIcon className="h-5 w-5" />
-              <span className="absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-400 ring-2 ring-white dark:ring-gray-900"></span>
-            </button>
+            <NotificationDropdown />
 
             {/* Profile dropdown */}
             <Menu as="div" className="relative">
@@ -127,9 +124,9 @@ export default function Header() {
                   
                   <Menu.Item>
                     {({ active }) => (
-                      <button
-                        onClick={handleProfileClick}
-                        className={`flex items-center w-full px-4 py-2 text-sm ${
+                      <Link
+                        to="/profile"
+                        className={`flex items-center px-4 py-2 text-sm ${
                           active 
                             ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white' 
                             : 'text-gray-700 dark:text-gray-200'
@@ -137,7 +134,7 @@ export default function Header() {
                       >
                         <UserIcon className="mr-3 h-4 w-4" />
                         Your Profile
-                      </button>
+                      </Link>
                     )}
                   </Menu.Item>
                   

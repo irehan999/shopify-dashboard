@@ -9,6 +9,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { Product } from '../models/ProductOptimized.js';
 import { ProductMap } from '../models/ProductMap.js';
+import { Store } from '../models/Store.js';
 
 // GraphQL Operations - All validated mutations and queries
 import {
@@ -77,15 +78,46 @@ export const executeCreateProduct = asyncHandler(async (req, res) => {
     const result = await createProduct(session, productInput);
     const shopifyProductId = result.product.id;
 
-    // Save mapping
-    await ProductMap.create({
-      dashboardProductId: productId,
-      shopifyProductId: shopifyProductId,
-      storeId: storeId,
-      handle: result.product.handle,
-      lastSyncAt: new Date(),
-      syncStatus: 'active'
-    });
+    // Save mapping using nested storeMappings schema
+    let pmDoc = await ProductMap.findOne({ dashboardProduct: productId });
+    if (pmDoc) {
+      pmDoc.addStoreMapping(storeId, shopifyProductId, result.product.handle);
+      await pmDoc.save();
+    } else {
+      await ProductMap.create({
+        dashboardProduct: productId,
+        createdBy: req.user?._id,
+        storeMappings: [{
+          store: storeId,
+          shopifyProductId: shopifyProductId,
+          shopifyHandle: result.product.handle,
+          status: 'active',
+          syncSettings: {
+            autoSync: true,
+            syncTitle: true,
+            syncDescription: true,
+            syncPrice: true,
+            syncInventory: true,
+            syncMedia: true,
+            syncSEO: true,
+            syncTags: true,
+            syncVariants: true,
+            syncStatus: true
+          },
+          variantMappings: [],
+          lastSyncAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }],
+        mappingStats: {
+          totalStores: 1,
+          activeStores: 1,
+          totalSyncs: 1,
+          successfulSyncs: 1,
+          failedSyncs: 0
+        }
+      });
+    }
 
     let variantsResult = null;
     let mediaResult = null;
@@ -99,15 +131,20 @@ export const executeCreateProduct = asyncHandler(async (req, res) => {
 
     // Sync media if requested and available
     if (syncMedia && product.media?.length > 0) {
-      const mediaInput = product.toShopifyMediaInput();
+      // For fileCreate, only send fields allowed in FileCreateInput (e.g., originalSource, alt)
+      const fileCreateInputs = (product.media || []).map(m => ({
+        originalSource: m.src,
+        alt: m.alt || ''
+      }));
       
       // First create files in Shopify
-      const filesResult = await createFiles(session, mediaInput);
+      const filesResult = await createFiles(session, fileCreateInputs);
       
-      // Then associate with product
-      const productMediaInput = filesResult.files.map(file => ({
-        originalSource: file.image?.url || file.sources?.[0]?.url,
-        alt: file.alt
+      // Then associate with product using required mediaContentType
+      const productMediaInput = (product.media || []).map(m => ({
+        originalSource: m.src,
+        mediaContentType: m.mediaContentType || 'IMAGE',
+        alt: m.alt || ''
       }));
       
       mediaResult = await createProductMedia(session, shopifyProductId, productMediaInput);
@@ -159,8 +196,8 @@ export const executeUpdateProduct = asyncHandler(async (req, res) => {
 
   // Get product mapping
   const mapping = await ProductMap.findOne({
-    dashboardProductId: productId,
-    storeId: storeId
+    dashboardProduct: productId,
+    'storeMappings.store': storeId
   });
 
   if (!mapping) {
@@ -184,8 +221,13 @@ export const executeUpdateProduct = asyncHandler(async (req, res) => {
     }
 
     // Shape data for update
+    const storeMapping = mapping.getStoreMapping(storeId);
+    if (!storeMapping || !storeMapping.shopifyProductId) {
+      throw new ApiError(404, 'Shopify product ID not found for this store');
+    }
+
     const updateInput = {
-      id: mapping.shopifyProductId,
+      id: storeMapping.shopifyProductId,
       ...product.toShopifyProductInput()
     };
 
@@ -198,18 +240,22 @@ export const executeUpdateProduct = asyncHandler(async (req, res) => {
 
     // Update variants if requested
     if (updateVariants && product.variants?.length > 0) {
-      const variantsInput = product.toShopifyVariantsInput(mapping.shopifyProductId);
-      variantsResult = await updateProductVariants(session, mapping.shopifyProductId, variantsInput);
+  const variantsInput = product.toShopifyVariantsInput(storeMapping.shopifyProductId);
+  variantsResult = await updateProductVariants(session, storeMapping.shopifyProductId, variantsInput);
     }
 
     // Update media if requested (careful - this can be expensive)
     if (updateMedia && product.media?.length > 0) {
-      const mediaInput = product.toShopifyMediaInput();
-      const filesResult = await createFiles(session, mediaInput);
+      const fileCreateInputs = (product.media || []).map(m => ({
+        originalSource: m.src,
+        alt: m.alt || ''
+      }));
+      const filesResult = await createFiles(session, fileCreateInputs);
       
-      const productMediaInput = filesResult.files.map(file => ({
-        originalSource: file.image?.url || file.sources?.[0]?.url,
-        alt: file.alt
+      const productMediaInput = (product.media || []).map(m => ({
+        originalSource: m.src,
+        mediaContentType: m.mediaContentType || 'IMAGE',
+        alt: m.alt || ''
       }));
       
       mediaResult = await createProductMedia(session, mapping.shopifyProductId, productMediaInput);
@@ -217,8 +263,8 @@ export const executeUpdateProduct = asyncHandler(async (req, res) => {
 
     // Update options if requested
     if (updateOptions && product.options?.length > 0) {
-      const optionsInput = product.options;
-      optionsResult = await createProductOptions(session, mapping.shopifyProductId, optionsInput);
+  const optionsInput = product.options;
+  optionsResult = await createProductOptions(session, storeMapping.shopifyProductId, optionsInput);
     }
 
     // Update mapping sync status
@@ -232,7 +278,7 @@ export const executeUpdateProduct = asyncHandler(async (req, res) => {
       shopifyProduct: result.product,
       mapping: {
         dashboardProductId: productId,
-        shopifyProductId: mapping.shopifyProductId,
+    shopifyProductId: storeMapping.shopifyProductId,
         storeId: storeId
       },
       updateResults: {
@@ -331,11 +377,15 @@ export const executeSyncProduct = asyncHandler(async (req, res) => {
     // Attach media after upsert if dashboard has media (non-fatal on failure)
     try {
       if (product.media?.length) {
-        const mediaInput = product.toShopifyMediaInput();
-        const filesResult = await createFiles(session, mediaInput);
-        const productMediaInput = filesResult.files.map(file => ({
-          originalSource: file.image?.url || file.sources?.[0]?.url,
-          alt: file.alt
+        const fileCreateInputs = (product.media || []).map(m => ({
+          originalSource: m.src,
+          alt: m.alt || ''
+        }));
+        await createFiles(session, fileCreateInputs);
+        const productMediaInput = (product.media || []).map(m => ({
+          originalSource: m.src,
+          mediaContentType: m.mediaContentType || 'IMAGE',
+          alt: m.alt || ''
         }));
         await createProductMedia(session, result.product.id, productMediaInput);
       }
@@ -344,7 +394,7 @@ export const executeSyncProduct = asyncHandler(async (req, res) => {
     }
     
     // Determine operation based on whether mapping existed
-    operation = mapping ? 'updated' : 'created';
+  operation = mapping ? 'updated' : 'created';
 
     // Create or update mapping
     if (mapping) {
@@ -358,7 +408,7 @@ export const executeSyncProduct = asyncHandler(async (req, res) => {
         storeMapping.updatedAt = new Date();
         
         // Update variant mappings with new Shopify variant IDs
-        if (result.product.variants) {
+  if (result.product.variants) {
           result.product.variants.edges.forEach((variantEdge, index) => {
             const variant = variantEdge.node;
             const override = variantOverrides?.[index] || {};
@@ -495,8 +545,8 @@ export const executeDeleteProduct = asyncHandler(async (req, res) => {
 
   // Get mapping
   const mapping = await ProductMap.findOne({
-    dashboardProductId: productId,
-    storeId: storeId
+    dashboardProduct: productId,
+    'storeMappings.store': storeId
   });
 
   if (!mapping) {
@@ -510,17 +560,40 @@ export const executeDeleteProduct = asyncHandler(async (req, res) => {
     }
 
     // Delete from Shopify
-    const result = await deleteProduct(session, mapping.shopifyProductId);
+    const storeMapping = mapping.getStoreMapping(storeId);
+    if (!storeMapping || !storeMapping.shopifyProductId) {
+      throw new ApiError(404, 'Shopify product ID not found for this store');
+    }
+    const result = await deleteProduct(session, storeMapping.shopifyProductId);
 
-    // Update mapping status (keep for history)
-    await ProductMap.findByIdAndUpdate(mapping._id, {
-      syncStatus: 'deleted',
-      lastSyncAt: new Date()
-    });
+    // Update nested mapping status and return assigned inventory to pool
+    const now = new Date();
+    if (Array.isArray(storeMapping.variantMappings)) {
+      storeMapping.variantMappings.forEach(vm => {
+        const assigned = vm?.inventoryTracking?.assignedQuantity || 0;
+        if (!vm.inventoryTracking) vm.inventoryTracking = {};
+        vm.inventoryTracking.inventoryHistory = vm.inventoryTracking.inventoryHistory || [];
+        if (assigned > 0) {
+          vm.inventoryTracking.inventoryHistory.push({
+            action: 'returned',
+            quantity: assigned,
+            previousQuantity: assigned,
+            reason: 'Disconnected from store',
+            timestamp: now
+          });
+          vm.inventoryTracking.assignedQuantity = 0;
+          vm.inventoryTracking.locationInventory = [];
+        }
+      });
+    }
+    storeMapping.status = 'deleted';
+    storeMapping.lastSyncAt = now;
+    storeMapping.updatedAt = now;
+    await mapping.save();
 
     const response = {
       success: true,
-      deletedProductId: mapping.shopifyProductId,
+  deletedProductId: storeMapping.shopifyProductId,
       mapping: {
         dashboardProductId: productId,
         storeId: storeId,
@@ -551,9 +624,9 @@ export const getShopifyProduct = asyncHandler(async (req, res) => {
 
   // Get mapping
   const mapping = await ProductMap.findOne({
-    dashboardProductId: productId,
-    storeId: storeId,
-    syncStatus: { $ne: 'deleted' }
+    dashboardProduct: productId,
+    'storeMappings.store': storeId,
+    isDeleted: false
   });
 
   if (!mapping) {
@@ -567,13 +640,20 @@ export const getShopifyProduct = asyncHandler(async (req, res) => {
     }
 
     // Get full product data from Shopify
-    const shopifyProduct = await getProduct(session, mapping.shopifyProductId);
+    const storeMapping = mapping.getStoreMapping(storeId);
+    if (!storeMapping || !storeMapping.shopifyProductId) {
+      throw new ApiError(404, 'Shopify product ID not found for this store');
+    }
+    const shopifyProduct = await getProduct(session, storeMapping.shopifyProductId);
 
     if (!shopifyProduct) {
       // Update mapping status
-      await ProductMap.findByIdAndUpdate(mapping._id, {
-        syncStatus: 'not_found'
-      });
+      // Mark specific store mapping as not found
+      if (storeMapping) {
+        storeMapping.status = 'error';
+        storeMapping.updatedAt = new Date();
+        await mapping.save();
+      }
       throw new ApiError(404, 'Product not found in Shopify');
     }
 
@@ -582,10 +662,10 @@ export const getShopifyProduct = asyncHandler(async (req, res) => {
       shopifyProduct: shopifyProduct,
       mapping: {
         dashboardProductId: productId,
-        shopifyProductId: mapping.shopifyProductId,
+        shopifyProductId: storeMapping.shopifyProductId,
         storeId: storeId,
-        handle: mapping.handle,
-        lastSyncAt: mapping.lastSyncAt
+        handle: storeMapping.shopifyHandle,
+        lastSyncAt: storeMapping.lastSyncAt
       },
       executionTime: new Date()
     };
@@ -626,15 +706,20 @@ export const searchShopifyProducts = asyncHandler(async (req, res) => {
     // Get mappings for found products
     const shopifyIds = results.products.edges.map(edge => edge.node.id);
     const mappings = await ProductMap.find({
-      shopifyProductId: { $in: shopifyIds },
-      storeId: storeId
+      'storeMappings.shopifyProductId': { $in: shopifyIds },
+      'storeMappings.store': storeId
     });
 
     // Enhance results with mapping info
-    const enhancedProducts = results.products.edges.map(edge => ({
-      ...edge.node,
-      dashboardMapping: mappings.find(m => m.shopifyProductId === edge.node.id) || null
-    }));
+    const enhancedProducts = results.products.edges.map(edge => {
+      const containing = mappings.find(m =>
+        m.storeMappings.some(sm => sm.shopifyProductId === edge.node.id && sm.store.toString() === storeId.toString())
+      );
+      return {
+        ...edge.node,
+        dashboardMapping: containing || null
+      };
+    });
 
     const response = {
       success: true,
@@ -667,9 +752,9 @@ export const getStoreInventory = asyncHandler(async (req, res) => {
 
   // Get mapping
   const mapping = await ProductMap.findOne({
-    dashboardProductId: productId,
-    storeId: storeId,
-    syncStatus: 'active'
+    dashboardProduct: productId,
+    'storeMappings.store': storeId,
+    isDeleted: false
   });
 
   if (!mapping) {
@@ -683,14 +768,18 @@ export const getStoreInventory = asyncHandler(async (req, res) => {
     }
 
     // Get inventory data
-    const inventoryData = await getProductInventory(session, mapping.shopifyProductId);
+    const storeMapping = mapping.getStoreMapping(storeId);
+    if (!storeMapping || !storeMapping.shopifyProductId) {
+      throw new ApiError(404, 'Shopify product ID not found');
+    }
+    const inventoryData = await getProductInventory(session, storeMapping.shopifyProductId);
 
     const response = {
       success: true,
       inventory: inventoryData,
       mapping: {
         dashboardProductId: productId,
-        shopifyProductId: mapping.shopifyProductId,
+        shopifyProductId: storeMapping.shopifyProductId,
         storeId: storeId
       },
       executionTime: new Date()
@@ -747,10 +836,10 @@ export const executeBulkSync = asyncHandler(async (req, res) => {
           throw new Error(`Product ${productId} not found`);
         }
 
-        // Check mapping
+        // Check mapping for this product+store
         let mapping = await ProductMap.findOne({
-          dashboardProductId: productId,
-          storeId: storeId
+          dashboardProduct: productId,
+          'storeMappings.store': storeId
         });
 
         let result;
@@ -762,27 +851,58 @@ export const executeBulkSync = asyncHandler(async (req, res) => {
           result = await createProduct(session, productInput);
           operation = 'created';
 
-          mapping = await ProductMap.create({
-            dashboardProductId: productId,
-            shopifyProductId: result.product.id,
-            storeId: storeId,
-            handle: result.product.handle,
-            lastSyncAt: new Date(),
-            syncStatus: 'active'
-          });
+          // Attach to existing ProductMap doc or create a new one
+          let pmDoc = await ProductMap.findOne({ dashboardProduct: productId });
+          if (pmDoc) {
+            pmDoc.addStoreMapping(storeId, result.product.id, result.product.handle);
+            mapping = pmDoc;
+          } else {
+            mapping = await ProductMap.create({
+              dashboardProduct: productId,
+              createdBy: req.user?._id,
+              storeMappings: [{
+                store: storeId,
+                shopifyProductId: result.product.id,
+                shopifyHandle: result.product.handle,
+                status: 'active',
+                syncSettings: {
+                  autoSync: true,
+                  syncTitle: true,
+                  syncDescription: true,
+                  syncPrice: true,
+                  syncInventory: true,
+                  syncMedia: true,
+                  syncSEO: true,
+                  syncTags: true,
+                  syncVariants: true,
+                  syncStatus: true
+                },
+                variantMappings: [],
+                lastSyncAt: new Date(),
+                createdAt: new Date(),
+                updatedAt: new Date()
+              }],
+              mappingStats: {
+                totalStores: 1,
+                activeStores: 1,
+                totalSyncs: 1,
+                successfulSyncs: 1,
+                failedSyncs: 0
+              }
+            });
+          }
         } else {
           // Update existing
+          const storeMapping = mapping.getStoreMapping(storeId);
           const updateInput = {
-            id: mapping.shopifyProductId,
+            id: storeMapping.shopifyProductId,
             ...product.toShopifyProductInput()
           };
           result = await updateProduct(session, updateInput);
           operation = 'updated';
-
-          await ProductMap.findByIdAndUpdate(mapping._id, {
-            lastSyncAt: new Date(),
-            syncStatus: 'active'
-          });
+          storeMapping.lastSyncAt = new Date();
+          storeMapping.status = 'active';
+          await mapping.save();
         }
 
         return {
@@ -860,20 +980,21 @@ export const getProductSyncStatus = asyncHandler(async (req, res) => {
     }
 
     // Get all user's active stores
-    const stores = await Store.find({
+  const stores = await Store.find({
       userId: req.user._id,
       isActive: true
     });
 
     // Get all ProductMap entries for this product
     const productMappings = await ProductMap.find({
-      dashboardProduct: productId
+      dashboardProduct: productId,
+      isDeleted: false
     }).populate('storeMappings.store');
 
     // Build sync status for each store
     const syncStatuses = stores.map(store => {
       const mapping = productMappings.find(pm => 
-        pm.storeMappings.some(sm => sm.store._id.toString() === store._id.toString())
+        pm.storeMappings.some(sm => sm.store && sm.store._id.toString() === store._id.toString())
       );
 
       if (!mapping) {
@@ -889,7 +1010,7 @@ export const getProductSyncStatus = asyncHandler(async (req, res) => {
         };
       }
 
-      const storeMapping = mapping.getStoreMapping(store._id);
+  const storeMapping = mapping.getStoreMapping(store._id);
       
       return {
         storeId: store._id,

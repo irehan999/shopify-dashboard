@@ -15,15 +15,20 @@ export {
   useGenerateVariants,
   useUploadMedia,
   useDeleteMedia,
-  useSyncToStores,
+  // Shopify sync hooks (re-exported from useShopifySync.js via useProductApi.js)
+  useSyncToStore,
+  useSyncToMultipleStores,
+  useBulkSyncToStore,
+  useDeleteFromStore,
+  useStoreProduct,
+  useStoreInventory,
   useSyncStatus,
-  useRetrySync,
-  useConnectedStores,
-  useStoreDetails
+  useProductSyncManagement
 } from './hooks/useProductApi.js';
 
 // Export API functions
-export { productApi, syncApi, storeApi } from './api/productApi.js';
+export { productApi } from './api/productApi.js';
+export { shopifySyncApi } from './api/shopifySyncApi.js';
 
 // Export schemas
 export { 

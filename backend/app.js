@@ -8,6 +8,7 @@ import rateLimit from 'express-rate-limit';
 import authRoutes from './src/routes/authRoutes.js';
 import userRoutes from './src/routes/userRoutes.js';
 import notificationRoutes from './src/routes/notificationRoutes.js';
+import dashboardRoutes from './src/routes/dashboardRoutes.js';
 import shopifyRoutes from './src/routes/shopifyRoutes.js';
 import productRoutes from './src/routes/productRoutesNew.js';
 import shopifyGraphQLRoutes from './src/routes/shopifyGraphQLRoutesNew.js';
@@ -146,6 +147,7 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes); // authLimiter temporarily disabled
 app.use('/api/user', userRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/shopify', shopifyRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/shopify-admin', shopifyGraphQLRoutes);

@@ -251,11 +251,17 @@ export const syncInventoryFromShopify = asyncHandler(async (req, res) => {
  */
 export const getInventorySummary = asyncHandler(async (req, res) => {
   const { productId } = req.params;
-  const { storeId } = req.query;
+  let { storeId } = req.query;
 
   try {
     const query = { dashboardProduct: productId };
+    // Sanitize storeId to prevent CastError when an object is passed from the client
     if (storeId) {
+      if (typeof storeId === 'object') {
+        if (storeId._id) storeId = storeId._id;
+        else if (storeId.value) storeId = storeId.value;
+        else storeId = String(storeId);
+      }
       query['storeMappings.store'] = storeId;
     }
 

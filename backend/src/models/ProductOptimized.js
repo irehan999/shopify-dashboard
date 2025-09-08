@@ -393,7 +393,10 @@ productSchema.methods.toShopifyProductSetInput = function(locationId = null, col
       }
       if (variant.barcode) variantInput.barcode = variant.barcode
       if (variant.taxCode) variantInput.taxCode = variant.taxCode
-      if (typeof variant.taxable === 'boolean') variantInput.taxable = variant.taxable
+      // Shopify: Gift cards cannot be taxable; omit taxable when giftCard true
+      if (!this.giftCard && typeof variant.taxable === 'boolean') {
+        variantInput.taxable = variant.taxable
+      }
       // Do not include requiresShipping in productSet variant input (not supported)
       
   // Inventory settings
@@ -479,8 +482,8 @@ productSchema.methods.toShopifyVariantsInput = function() {
     if (variant.compareAtPrice) variantInput.compareAtPrice = variant.compareAtPrice.toString()
     if (variant.sku) variantInput.sku = variant.sku
     if (variant.barcode) variantInput.barcode = variant.barcode
-    if (variant.taxCode) variantInput.taxCode = variant.taxCode
-    if (typeof variant.taxable === 'boolean') variantInput.taxable = variant.taxable
+  if (variant.taxCode) variantInput.taxCode = variant.taxCode
+  if (!this.giftCard && typeof variant.taxable === 'boolean') variantInput.taxable = variant.taxable
     if (typeof variant.requiresShipping === 'boolean') variantInput.requiresShipping = variant.requiresShipping
     
     // Inventory settings

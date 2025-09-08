@@ -20,6 +20,7 @@ import ProductDetail from '@/pages/ProductDetail'
 import ProductEdit from '@/pages/ProductEdit'
 import StorePushPageWrapper from '@/pages/StorePushPageWrapper'
 import Settings from '@/pages/Settings'
+import UserProfile from '@/pages/UserProfile'
 
 // Auth components
 import Login from '@/pages/auth/Login'
@@ -49,6 +50,7 @@ const router = createBrowserRouter(
         <Route path="products/:id" element={<ProductDetail />} />
         <Route path="products/:id/push" element={<StorePushPageWrapper />} />
         <Route path="products/:id/edit" element={<ProductEdit />} />
+        <Route path="profile" element={<UserProfile />} />
         <Route path="settings" element={<Settings />} />
       </Route>
     </>

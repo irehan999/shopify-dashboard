@@ -14,7 +14,7 @@ import {
   ChartBarIcon
 } from '@heroicons/react/24/outline';
 import { useInventorySummary } from '../../hooks/useInventoryApi.js';
-import { useSyncToStore } from '../../hooks/useShopifySync.js';
+import { useSyncToStore, useDeleteFromStore } from '../../hooks/useShopifySync.js';
 import { toast } from 'react-hot-toast';
 
 /**
@@ -28,12 +28,10 @@ export const ConnectedProductDetail = ({ product, onEdit, onPushToStores }) => {
   
   // Only fetch inventory if product has store mappings
   const productId = product.id || product._id;
-  const { data: inventorySummary, isLoading: inventoryLoading } = useInventorySummary(
-    productId,
-    { enabled: product.isConnected }
-  );
+  const { data: inventorySummary, isLoading: inventoryLoading } = useInventorySummary(productId, null, { enabled: product.isConnected });
   
   const syncToStore = useSyncToStore();
+  const deleteFromStore = useDeleteFromStore();
 
   const formatPrice = (price) => {
     return new Intl.NumberFormat('en-US', {
@@ -48,11 +46,23 @@ export const ConnectedProductDetail = ({ product, onEdit, onPushToStores }) => {
       await syncToStore.mutateAsync({
         productId: productId,
         storeId,
-        forceSync: true
+        syncOptions: { forceSync: true }
       });
       toast.success('Product synced successfully!');
     } catch (error) {
       toast.error(error.message || 'Failed to sync product');
+    } finally {
+      setSelectedStoreForSync(null);
+    }
+  };
+
+  const handleDisconnect = async (storeId) => {
+    try {
+      setSelectedStoreForSync(storeId);
+      await deleteFromStore.mutateAsync({ productId, storeId });
+      toast.success('Product disconnected from store');
+    } catch (e) {
+      toast.error(e?.response?.data?.message || 'Failed to disconnect');
     } finally {
       setSelectedStoreForSync(null);
     }
@@ -199,18 +209,28 @@ export const ConnectedProductDetail = ({ product, onEdit, onPushToStores }) => {
                           Synced {mapping.lastSyncAt ? `• ${new Date(mapping.lastSyncAt).toLocaleDateString()}` : ''}
                         </div>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleSyncToStore(mapping.storeId)}
-                        disabled={syncToStore.isPending}
-                      >
-                        {syncToStore.isPending && selectedStoreForSync === mapping.storeId ? (
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                        ) : (
-                          'Update'
-                        )}
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleSyncToStore(mapping.storeId)}
+                          disabled={syncToStore.isPending}
+                        >
+                          {syncToStore.isPending && selectedStoreForSync === mapping.storeId ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                          ) : (
+                            'Update'
+                          )}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleDisconnect(mapping.storeId)}
+                          disabled={deleteFromStore.isPending}
+                        >
+                          {deleteFromStore.isPending && selectedStoreForSync === mapping.storeId ? 'Removing…' : 'Disconnect'}
+                        </Button>
+                      </div>
                     </div>
                   ))
                 ) : (
@@ -251,7 +271,7 @@ export const ConnectedProductDetail = ({ product, onEdit, onPushToStores }) => {
                               {variant.inventoryQuantity || 0} units
                             </Badge>
                             <div className="text-xs text-gray-500">
-                              {variant.inventoryManagement === 'shopify' ? 'Tracked' : 'Not tracked'}
+                              {variant.inventoryManagement === 'shopify' ? 'Tracked' : ''}
                             </div>
                           </div>
                         </div>

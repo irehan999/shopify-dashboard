@@ -67,8 +67,20 @@ export const useSyncToStore = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: ({ productId, storeId, syncOptions }) => 
-      shopifySyncApi.syncProduct(productId, storeId, syncOptions),
+    mutationFn: (vars) => {
+      const { productId, storeId } = vars || {};
+      // Back-compat shim: allow forceSync at top level
+      const syncOptions = vars?.syncOptions ?? (
+        typeof vars?.forceSync !== 'undefined' || vars?.variantOverrides || vars?.assignedInventory
+          ? {
+              forceSync: !!vars?.forceSync,
+              variantOverrides: vars?.variantOverrides || {},
+              assignedInventory: vars?.assignedInventory || {}
+            }
+          : {}
+      );
+      return shopifySyncApi.syncProduct(productId, storeId, syncOptions);
+    },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['sync-status'] });
       queryClient.invalidateQueries({ 

@@ -1,4 +1,8 @@
 import { useState } from 'react'
+import { toast } from 'react-hot-toast'
+import { authAPI } from '@/features/auth/api/authAPI'
+import { userAPI } from '@/features/user/api/userAPI'
+import useAuthStore from '@/stores/authStore'
 import { 
   CogIcon,
   KeyIcon,
@@ -15,12 +19,7 @@ const settingsCategories = [
     icon: CogIcon,
     description: 'Basic application settings',
   },
-  {
-    id: 'api',
-    name: 'API Keys',
-    icon: KeyIcon,
-    description: 'Manage your API keys and integrations',
-  },
+  // Removed API keys section for end users
   {
     id: 'notifications',
     name: 'Notifications',
@@ -39,16 +38,17 @@ const settingsCategories = [
     icon: ShieldCheckIcon,
     description: 'Security and privacy settings',
   },
-  {
-    id: 'integrations',
-    name: 'Integrations',
-    icon: GlobeAltIcon,
-    description: 'Third-party integrations',
-  },
 ]
 
 export default function Settings() {
   const [activeCategory, setActiveCategory] = useState('general')
+  const { user, updateUser } = useAuthStore()
+  const [prefs, setPrefs] = useState({
+    notifications: user?.preferences?.notifications ?? true,
+    theme: user?.preferences?.theme || 'dark',
+    language: user?.preferences?.language || 'en'
+  })
+  const [pwd, setPwd] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' })
 
   const renderGeneralSettings = () => (
     <div className="space-y-6">
@@ -95,62 +95,20 @@ export default function Settings() {
     </div>
   )
 
-  const renderApiSettings = () => (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-          API Configuration
-        </h3>
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-4 mb-6">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <ShieldCheckIcon className="h-5 w-5 text-yellow-400" />
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                Security Notice
-              </h3>
-              <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
-                <p>Keep your API keys secure and never share them publicly.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Shopify App API Key
-            </label>
-            <input
-              type="password"
-              placeholder="••••••••••••••••"
-              className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Shopify App Secret
-            </label>
-            <input
-              type="password"
-              placeholder="••••••••••••••••"
-              className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Webhook Secret
-            </label>
-            <input
-              type="password"
-              placeholder="••••••••••••••••"
-              className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  )
+  const savePreferences = async () => {
+    try {
+      const res = await userAPI.updateProfile({}) // no-op to ensure auth; optional
+      const prefRes = await userAPI.updatePreferences?.(prefs)
+      // If updatePreferences is not exported, call api directly
+      if (!prefRes) {
+        await (await import('@/lib/api')).api.patch('/api/user/preferences', prefs)
+      }
+      updateUser({ ...user, preferences: { ...user.preferences, ...prefs } })
+      toast.success('Preferences updated')
+    } catch (e) {
+      toast.error('Failed to update preferences')
+    }
+  }
 
   const renderNotificationSettings = () => (
     <div className="space-y-6">
@@ -162,48 +120,55 @@ export default function Settings() {
           <div className="flex items-center justify-between">
             <div>
               <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Order Notifications
+                Enable Notifications
               </h4>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                Get notified when new orders are placed
+                Turn on/off in-app notifications
               </p>
             </div>
             <input
               type="checkbox"
-              defaultChecked
+              checked={!!prefs.notifications}
+              onChange={(e) => setPrefs(p => ({ ...p, notifications: e.target.checked }))}
               className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
             />
           </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Sync Notifications
-              </h4>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Get notified when product sync completes
-              </p>
-            </div>
-            <input
-              type="checkbox"
-              defaultChecked
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Error Notifications
-              </h4>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Get notified when errors occur
-              </p>
-            </div>
-            <input
-              type="checkbox"
-              defaultChecked
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            />
-          </div>
+        </div>
+        <div className="mt-6">
+          <button onClick={savePreferences} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Save Preferences</button>
+        </div>
+      </div>
+    </div>
+  )
+
+  const renderSecurity = () => (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+          Change Password
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <input type="password" placeholder="Current password" className="px-3 py-2 border rounded-md" value={pwd.oldPassword} onChange={e => setPwd({ ...pwd, oldPassword: e.target.value })} />
+          <div />
+          <input type="password" placeholder="New password" className="px-3 py-2 border rounded-md" value={pwd.newPassword} onChange={e => setPwd({ ...pwd, newPassword: e.target.value })} />
+          <input type="password" placeholder="Confirm new password" className="px-3 py-2 border rounded-md" value={pwd.confirmPassword} onChange={e => setPwd({ ...pwd, confirmPassword: e.target.value })} />
+        </div>
+        <div className="mt-4">
+          <button
+            onClick={async () => {
+              if (pwd.newPassword !== pwd.confirmPassword) { toast.error('Passwords do not match'); return; }
+              try {
+                await authAPI.changePassword({ oldPassword: pwd.oldPassword, newPassword: pwd.newPassword })
+                toast.success('Password changed')
+                setPwd({ oldPassword: '', newPassword: '', confirmPassword: '' })
+              } catch (e) {
+                toast.error(e.response?.data?.message || 'Failed to change password')
+              }
+            }}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            Update Password
+          </button>
         </div>
       </div>
     </div>
@@ -213,10 +178,10 @@ export default function Settings() {
     switch (activeCategory) {
       case 'general':
         return renderGeneralSettings()
-      case 'api':
-        return renderApiSettings()
       case 'notifications':
         return renderNotificationSettings()
+      case 'security':
+        return renderSecurity()
       default:
         return (
           <div className="text-center py-12">

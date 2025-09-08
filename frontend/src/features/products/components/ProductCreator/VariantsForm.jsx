@@ -440,12 +440,19 @@ export const VariantsForm = ({ form }) => {
                                   "block w-full pl-7 pr-3 py-2 rounded-md border transition-all duration-200 text-sm",
                                   "bg-white dark:bg-gray-700 text-gray-900 dark:text-white",
                                   "placeholder-gray-500 dark:placeholder-gray-400",
-                                  "border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400",
+                                  errors?.variants?.[variantIndex]?.compareAtPrice 
+                                    ? "border-red-300 dark:border-red-600 focus:border-red-500 dark:focus:border-red-400"
+                                    : "border-gray-300 dark:border-gray-600 focus:border-blue-500 dark:focus:border-blue-400",
                                   "focus:outline-none focus:ring-0"
                                 )}
                                 placeholder="0.00"
                               />
                             </div>
+                            {errors?.variants?.[variantIndex]?.compareAtPrice && (
+                              <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+                                {errors.variants[variantIndex].compareAtPrice.message}
+                              </p>
+                            )}
                           </div>
                         )}
                       />

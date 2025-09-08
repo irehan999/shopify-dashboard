@@ -278,23 +278,28 @@ const getUserProducts = asyncHandler(async (req, res) => {
     
     const storeMappings = await ProductMap.find({
       dashboardProduct: { $in: productIds }
-    }).populate('storeMappings.store', 'shop domain name');
+    }).populate('storeMappings.store', 'shopName shopDomain');
 
     // Create a map of productId to store mappings
     const mappingsMap = {};
     storeMappings.forEach(mapping => {
-      mappingsMap[mapping.dashboardProduct.toString()] = mapping.storeMappings.map(sm => ({
-        storeId: sm.store._id,
-        shopifyProductId: sm.shopifyProductId,
-        store: {
-          id: sm.store._id,
-          shop: sm.store.shop,
-          domain: sm.store.domain,
-          name: sm.store.name
-        },
-        lastSyncAt: sm.lastSyncAt,
-        syncStatus: sm.status
-      }));
+      mappingsMap[mapping.dashboardProduct.toString()] = mapping.storeMappings
+        .filter(sm => sm.status !== 'deleted')
+        .map(sm => ({
+          storeId: sm.store._id,
+          shopifyProductId: sm.shopifyProductId,
+          store: {
+            id: sm.store._id,
+            shopName: sm.store.shopName,
+            shopDomain: sm.store.shopDomain,
+            // backwards-compat for UI fields
+            shop: sm.store.shopDomain,
+            domain: sm.store.shopDomain,
+            name: sm.store.shopName
+          },
+          lastSyncAt: sm.lastSyncAt,
+          syncStatus: sm.status
+        }));
     });
 
     // Add computed fields and connection information
@@ -354,29 +359,42 @@ const getProduct = asyncHandler(async (req, res) => {
       throw new ApiError(404, 'Product not found');
     }
 
-    // Get ProductMap data to determine store connections
+    // Get ProductMap data to determine store connections (aligned with ProductMap schema)
     const ProductMap = (await import('../models/ProductMap.js')).ProductMap;
-    const storeMappings = await ProductMap.find({
-      dashboardProductId: id,
-      userId: userId
-    }).populate('storeId', 'shop domain name');
+    const mappingDocs = await ProductMap.find({
+      dashboardProduct: id,
+      isDeleted: false
+    }).populate('storeMappings.store', 'shopName shopDomain');
+
+    // Flatten mappings to a simple array for the frontend
+    const flatStoreMappings = [];
+    for (const doc of mappingDocs) {
+      for (const sm of (doc.storeMappings || [])) {
+        if (sm?.status === 'deleted') continue;
+        if (!sm?.store) continue;
+        flatStoreMappings.push({
+          storeId: sm.store._id,
+          shopifyProductId: sm.shopifyProductId,
+          store: {
+            id: sm.store._id,
+            shopName: sm.store.shopName,
+            shopDomain: sm.store.shopDomain,
+            // backwards-compat for UI fields
+            shop: sm.store.shopDomain,
+            name: sm.store.shopName,
+            domain: sm.store.shopDomain
+          },
+          lastSyncAt: sm.lastSyncAt,
+          syncStatus: sm.status
+        });
+      }
+    }
 
     // Add store connection information to product
     const productWithMappings = {
       ...product.toObject(),
-      storeMappings: storeMappings.map(mapping => ({
-        storeId: mapping.storeId._id,
-        shopifyProductId: mapping.shopifyProductId,
-        store: {
-          id: mapping.storeId._id,
-          shop: mapping.storeId.shop,
-          domain: mapping.storeId.domain,
-          name: mapping.storeId.name
-        },
-        lastSyncAt: mapping.lastSyncAt,
-        syncStatus: mapping.syncStatus
-      })),
-      isConnected: storeMappings.length > 0
+      storeMappings: flatStoreMappings,
+      isConnected: flatStoreMappings.length > 0
     };
 
     res.json(

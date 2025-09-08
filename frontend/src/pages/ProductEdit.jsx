@@ -69,10 +69,14 @@ export default function ProductEdit() {
 
   const handleSyncStore = async (storeId) => {
     try {
-      await syncToStore.mutateAsync({ productId: id, storeId, forceSync: true })
+      await syncToStore.mutateAsync({ 
+        productId: id, 
+        storeId, 
+        syncOptions: { forceSync: true }
+      })
       toast.success('Synced to store')
     } catch (e) {
-      toast.error(e?.message || 'Sync failed')
+      toast.error(e?.response?.data?.message || e?.message || 'Sync failed')
     }
   }
 

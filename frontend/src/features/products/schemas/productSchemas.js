@@ -88,6 +88,13 @@ export const variantSchema = z.object({
     optionName: z.string(), // Must match option.name from product.options
     name: z.string()        // Must match optionValue.name from option.optionValues
   })).default([])
+}).refine((val) => {
+  // If compareAtPrice is provided, it must be greater than price
+  if (val.compareAtPrice === undefined || val.compareAtPrice === null) return true;
+  return val.compareAtPrice > val.price;
+}, {
+  message: 'Compare at price must be greater than price',
+  path: ['compareAtPrice']
 });
 
 // Media upload schema - matches backend mediaSchema exactly
@@ -153,6 +160,14 @@ export const productFormSchema = z.object({
   
   // Store sync settings (frontend only - not sent to product creation)
   storeMappings: storeMappingSchema.default({ syncToAll: false, selectedStoreIds: [] })
+}).refine((data) => {
+  // For single-variant flow (no options), if compareAtPrice provided, validate against base price
+  if (data.options && data.options.length > 0) return true;
+  if (data.compareAtPrice === undefined || data.compareAtPrice === null) return true;
+  return data.compareAtPrice > (data.price ?? 0);
+}, {
+  message: 'Compare at price must be greater than price',
+  path: ['compareAtPrice']
 });
 
 // Form step validation schemas - updated to match new structure
@@ -171,10 +186,17 @@ export const stepSchemas = {
     price: z.number().min(0.01, 'Price must be greater than 0'), // Required and > 0
     sku: z.string().optional(),
     inventoryQuantity: z.number().min(0).default(0),
+    compareAtPrice: z.number().min(0).optional(),
     seo: z.object({
       title: z.string().max(60).optional(),
       description: z.string().max(160).optional()
     }).default({})
+  }).refine((data) => {
+    if (data.compareAtPrice === undefined || data.compareAtPrice === null) return true;
+    return data.compareAtPrice > data.price;
+  }, {
+    message: 'Compare at price must be greater than price',
+    path: ['compareAtPrice']
   }),
   
   options: z.object({
