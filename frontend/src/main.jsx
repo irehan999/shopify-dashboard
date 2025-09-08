@@ -14,11 +14,13 @@ import '@/index.css'
 import Layout from '@/components/Layout'
 import Dashboard from '@/pages/Dashboard'
 import Stores from '@/pages/Stores'
+import StoreDetail from '@/pages/StoreDetail'
 import Products from '@/pages/Products'
 import ProductCreatePage from '@/pages/ProductCreatePage'
 import ProductDetail from '@/pages/ProductDetail'
 import ProductEdit from '@/pages/ProductEdit'
 import StorePushPageWrapper from '@/pages/StorePushPageWrapper'
+import Notifications from '@/pages/Notifications'
 import Settings from '@/pages/Settings'
 import UserProfile from '@/pages/UserProfile'
 
@@ -45,11 +47,13 @@ const router = createBrowserRouter(
       <Route path="/" element={<AuthGuard><Layout /></AuthGuard>}>
         <Route index element={<Dashboard />} />
         <Route path="stores" element={<Stores />} />
+        <Route path="stores/:storeId" element={<StoreDetail />} />
         <Route path="products" element={<Products />} />
         <Route path="products/create" element={<ProductCreatePage />} />
         <Route path="products/:id" element={<ProductDetail />} />
         <Route path="products/:id/push" element={<StorePushPageWrapper />} />
         <Route path="products/:id/edit" element={<ProductEdit />} />
+        <Route path="notifications" element={<Notifications />} />
         <Route path="profile" element={<UserProfile />} />
         <Route path="settings" element={<Settings />} />
       </Route>

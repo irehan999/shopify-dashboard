@@ -201,9 +201,9 @@ const handleConnect = async (e) => {
               store={store}
               onDisconnect={() => handleDisconnectClick(store._id, store.shopName)}
               isDisconnecting={disconnectStore.isPending}
-              onViewAnalytics={() => {
-                // Navigate to analytics page
-                window.location.href = `/stores/${store._id}/analytics`;
+              onViewDetails={() => {
+                // Navigate to store details page
+                window.location.href = `/stores/${store._id}`;
               }}
             />
           ))}
@@ -230,7 +230,7 @@ const handleConnect = async (e) => {
   );
 };
 
-const StoreCard = ({ store, onDisconnect, onViewAnalytics, isDisconnecting }) => {
+const StoreCard = ({ store, onDisconnect, onViewDetails, isDisconnecting }) => {
   const formatDate = (date) => {
     return new Date(date).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -281,9 +281,9 @@ const StoreCard = ({ store, onDisconnect, onViewAnalytics, isDisconnecting }) =>
 
         <div className="flex space-x-2 ml-4">
           <button
-            onClick={onViewAnalytics}
+            onClick={onViewDetails}
             className="p-2 text-gray-400 hover:text-blue-600 dark:text-gray-500 dark:hover:text-blue-400 transition-colors"
-            title="View Analytics"
+            title="View Store Details"
           >
             <BarChart3 className="h-5 w-5" />
           </button>

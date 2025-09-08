@@ -3,6 +3,7 @@ import {
   HomeIcon, 
   ShoppingBagIcon, 
   BuildingStorefrontIcon,
+  BellIcon,
   CogIcon,
   ChartBarIcon
 } from '@heroicons/react/24/outline'
@@ -11,6 +12,7 @@ const navigation = [
   { name: 'Dashboard', href: '/', icon: HomeIcon },
   { name: 'Stores', href: '/stores', icon: BuildingStorefrontIcon },
   { name: 'Products', href: '/products', icon: ShoppingBagIcon },
+  { name: 'Notifications', href: '/notifications', icon: BellIcon },
   { name: 'Analytics', href: '/analytics', icon: ChartBarIcon },
   { name: 'Settings', href: '/settings', icon: CogIcon },
 ]

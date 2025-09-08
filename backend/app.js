@@ -14,7 +14,7 @@ import productRoutes from './src/routes/productRoutesNew.js';
 import shopifyGraphQLRoutes from './src/routes/shopifyGraphQLRoutesNew.js';
 import collectionRoutes from './src/routes/collectionRoutes.js';
 import inventoryRoutes from './src/routes/inventoryRoutes.js';
-
+import storeRoutes from './src/routes/storeRoutes.js';
 // Import webhook handlers directly for early middleware setup
 import { 
   handleAppUninstalled,
@@ -153,6 +153,7 @@ app.use('/api/products', productRoutes);
 app.use('/api/shopify-admin', shopifyGraphQLRoutes);
 app.use('/api/collections', collectionRoutes);
 app.use('/api/inventory', inventoryRoutes);
+app.use('/api/stores', storeRoutes);
 
 // Future routes will be added here
 // app.use('/api/stores', storeRoutes);

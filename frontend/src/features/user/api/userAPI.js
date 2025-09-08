@@ -122,6 +122,23 @@ export const userAPI = {
   },
 
   /**
+   * Update User Preferences
+   * 
+   * Backend Endpoint: PATCH /api/user/preferences
+   * Backend Expects: { notifications?, theme?, language? }
+   * Backend Returns: { user } - Updated user data with preferences
+   * 
+   * @param {Object} preferencesData - Preferences update data
+   * @param {boolean} [preferencesData.notifications] - Notification preferences
+   * @param {string} [preferencesData.theme] - Theme preference (light, dark, system)
+   * @param {string} [preferencesData.language] - Language preference
+   * @returns {Promise<Object>} Backend response with updated preferences
+   */
+  updatePreferences: (preferencesData) => {
+    return api.patch('/api/user/preferences', preferencesData);
+  },
+
+  /**
    * Deactivate User Account (Temporary)
    * 
    * Backend Endpoint: POST /api/user/deactivate

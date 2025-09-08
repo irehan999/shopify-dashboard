@@ -4,21 +4,28 @@
  */
 
 import { Router } from 'express';
+
 import {
-  getStoreCollections,
-  getStoreLocations,
-  getStoreSummary
-} from '../controllers/shopifyStoreController.js';
+  getStoreDetails,
+  getUserStores,
+  getStorePushedProducts,
+  getStoreStats,
+  getStoreSyncHistory
+} from '../controllers/storeController.js';
+import { authenticateUser } from '../middleware/auth.js';
 
 const router = Router();
 
-// Get collections for a specific store (for dynamic selection)
-router.get('/stores/:storeId/collections', getStoreCollections);
+// All routes require authentication
+router.use(authenticateUser);
 
-// Get locations for a specific store (for inventory management)
-router.get('/stores/:storeId/locations', getStoreLocations);
+// Store management routes
+router.get('/', getUserStores);
+router.get('/:storeId', getStoreDetails);
+router.get('/:storeId/products', getStorePushedProducts);
+router.get('/:storeId/stats', getStoreStats);
+router.get('/:storeId/sync-history', getStoreSyncHistory);
 
-// Get store summary (collections count, locations, capabilities)
-router.get('/stores/:storeId/summary', getStoreSummary);
+
 
 export default router;
