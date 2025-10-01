@@ -5,7 +5,7 @@
 ---
 
 ## 🚀 Overview
-Shopify Dashboard is a full-stack, production-grade platform for managing Shopify stores, products, notifications, and user profiles. Built for modern e-commerce teams, it combines a beautiful, responsive frontend with a robust, real-time backend. This project demonstrates advanced engineering, clean UI/UX, and real-world integrations — perfect for your portfolio or as a foundation for a SaaS product.
+Shopify Dashboard is a full-stack, production-grade platform for managing Shopify stores, products, notifications, and user profiles. Built for modern e-commerce teams, it combines a beautiful, responsive frontend with a robust, real-time backend. This project demonstrates advanced engineering, clean UI/UX, and real-world integrations.
 
 ---
 
@@ -70,14 +70,6 @@ Shopify Dashboard is a full-stack, production-grade platform for managing Shopif
 
 ---
 
-## 🏆 Why This Project Stands Out
-- **Production-Ready Architecture**: Clean separation of concerns, scalable codebase, and real-world integrations.
-- **Modern UI/UX**: No clutter, no outdated patterns — just a beautiful, intuitive experience.
-- **Real-Time Everything**: Live notifications and updates using Socket.IO.
-- **Security Best Practices**: JWT, httpOnly cookies, and secure CORS.
-- **Portfolio-Grade**: Showcases advanced full-stack skills, real integrations, and a polished user experience.
-
----
 
 ## 📸 Screenshots
 
